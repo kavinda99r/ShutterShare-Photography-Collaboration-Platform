@@ -1,0 +1,81 @@
+/*================================= Righ Column =================================*/
+
+.message-content{
+    border: 1px solid #b6b6b6;
+    width: 100%;
+    padding: 10px 10px;
+    border-radius: 6px;
+
+}
+.messages{
+    width: 100%;
+    height: 300px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+    background-color: #e0e0e0;
+
+}
+.message-content input{
+    outline: none;
+    padding: 15px 20px;
+    border: 1px solid #b6b6b6;
+    border-radius: 6px;
+    font-size: 14px;
+    width: 94%;
+}
+
+.message-content button{
+    border: none;
+    border-radius: 6px;
+    padding: 15px 20px;
+    background-color: rgba(82, 124, 217, 1); 
+    color: white;
+    font-size: 14px;
+    font-weight: 400;
+    transition: .3s;
+    margin-left: 10px;
+}
+
+.add-upload{
+    display: flex;
+    justify-content: space-between;
+    margin-top: 15px;
+}
+
+.add-upload button{
+    border: none;
+    border-radius: 6px;
+    padding: 15px 70px;
+    background-color: rgba(82, 124, 217, 1); 
+    color: white;
+    font-size: 18px;
+    font-weight: 400;
+    transition: .3s;
+}
+
+.confirm-section{
+    width: 100%;
+    height: 200px;
+    padding: 20px 20px;
+    margin-bottom: 10px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.confirm-section p{
+    margin-bottom: 15px;
+}
+
+.complete-btn{
+    border: none;
+    border-radius: 6px;
+    padding: 15px 70px;
+    background-color: rgba(82, 124, 217, 1); 
+    color: white;
+    font-size: 18px;
+    font-weight: 400;
+    transition: .3s;
+    margin-top: 20px;
+}
+

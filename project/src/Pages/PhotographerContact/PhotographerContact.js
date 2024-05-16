@@ -1,13 +1,12 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
-import './PhotographerHome.css'
 import Footer from '../../Components/Footer/Footer'
+import './PhotographerContact.css'
 
 import logo from '../../Assets/Logo2.png'
 import profile from '../../Assets/Profile.png'
+import { Link } from 'react-router-dom'
 
-const PhotographerHome = () => {
-
+const PhotographerContact = () => {
   return (
     <div>
       <div>
@@ -61,53 +60,37 @@ const PhotographerHome = () => {
 
         <div className='rightcolumn'>
           <div className='R-card'>
-            <h2>Photographer Name</h2>
-            <div className='form-content'>
-              <form>
-                <label>Type</label>
-                <input type='text' name='type'/>
-                <label>Location</label>
-                <input type='text' name='location'/>
-                <label>Price</label>
-                <input type='text' name='price'/>
-              </form>
+            <h2>Client Name</h2>
+            <div className='message-content'>
+              <div className='messages'>
+
+              </div>
+              <input type='text' name='message'/>
+              <button>X</button>
             </div>
           </div>
           <div className='R-card'>
-            <h2>Description</h2>
-            <form>
-                <textarea rows={10} cols={50}/>  
-              </form>
-          </div>
-          <div className='R-card'>
-            <h2>Portfolio</h2>
+            <h2>Photos</h2>
             <div className='photo'>
 
             </div>
-            <div className='add'>
-              <button>Add Photos</button>
+            <div className='add-upload'>
+              <button>Upload Photos</button>
             </div>
           </div>
           <div className='R-card'>
-            <h2>Other Contact Details</h2>
-            <form className='contact-content'>
-                <label>Email</label>
-                <input type='text' name='email'/>
-                <label>Contact Number</label>
-                <input type='text' name='mobile'/>
-                
-              </form>
-          </div>
-          <div className='R-card'>
-            <div className='save-btn'>
-              <button>Save Changes</button>
+            <div className='confirm-section'>
+              <p>Confirmed</p>
+              <p>Order Completed</p>
+              <button className='complete-btn'>Complete the Order</button>
             </div>
+            
             
           </div>
         </div>
 
 
-      </div> 
+      </div>
       <div>
         <Footer/>
       </div>
@@ -115,4 +98,4 @@ const PhotographerHome = () => {
   )
 }
 
-export default PhotographerHome
+export default PhotographerContact

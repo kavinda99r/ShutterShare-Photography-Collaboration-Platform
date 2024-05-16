@@ -24,7 +24,7 @@ const NavbarCustom = () => {
             <li><LinkScroll to="Hero" spy={true} smooth={true} offset={-100} duration={500} className='action'>Home</LinkScroll></li>
             <li><LinkScroll to="About" spy={true} smooth={true} offset={-100} duration={500} className='action'>Messages</LinkScroll></li>
             <li><LinkScroll to="Feature" spy={true} smooth={true} offset={-100} duration={500} className='action'>Notifications</LinkScroll></li>
-            <img src={profile} alt='' className='profile'/>
+            <img src={profile} alt='' className='profile-photo'/>
             
         </ul>
        

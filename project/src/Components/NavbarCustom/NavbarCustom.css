@@ -63,7 +63,6 @@ ul .basic-btn{
     padding: 10px 40px;
     border-radius: 20px;
     cursor: pointer;
-    transition: .4s;
 }
 .basic-btn:hover{
     background: rgba(82, 124, 217, 1);
@@ -74,7 +73,7 @@ ul .basic-btn{
     background: rgb(110, 155, 251);
     border-color: rgb(110, 155, 251);
 }
-ul img{
+.profile-photo{
     width: 40px;
     height: 40px;
     margin-left: 15px;

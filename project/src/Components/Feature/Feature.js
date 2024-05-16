@@ -31,7 +31,7 @@ const Feature = () => {
             <img src={icon2} alt='' className='icon'/>
           </div>
           <div className='f-col-1'>
-            <h2>Best Photo Selection with Machine Learning</h2>
+            <h2>Portfolio Showcase for Photographers</h2>
             <p>A cutting-edge photo selection feature seamlessly identifies 
               and prioritizes images showcasing optimal facial expressions, 
               like smiles, streamlining the process for clients. Through 
@@ -42,7 +42,7 @@ const Feature = () => {
       </div>
       <div className='featurecolumn'>
           <div className='f-col-1'>
-            <h2>Best Photo Selection with Machine Learning</h2>
+            <h2>Direct Messaging Feature</h2>
             <p>A cutting-edge photo selection feature seamlessly identifies 
               and prioritizes images showcasing optimal facial expressions, 
               like smiles, streamlining the process for clients. Through 

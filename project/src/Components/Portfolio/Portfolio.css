@@ -1,0 +1,39 @@
+.descr {
+    margin-bottom: 5%;
+    margin-left: 20%;
+    margin-right: 20%;
+    }
+.txt{
+    text-align: center;
+    width: 100%;
+    min-width: 250px;
+    padding: 150px 300px;
+    border: 1px solid #5d5d5d;
+    border-radius: 5px;
+    cursor: pointer;
+    position: relative;
+    
+}
+.prtf{
+    margin-bottom: 5%;
+    margin-left: 20%;
+    margin-right: 20%;
+}
+
+.prtf-reviews{
+    margin-bottom: 5%;
+    margin-left: 20%;
+    margin-right: 20%;
+}
+.photo{
+    border: 1px solid #5d5d5d;
+    background: rgb(255, 255, 255);
+    width: 100%;
+    padding: 250px 300px;
+    border-radius: 5px;
+}
+.profiles{
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}

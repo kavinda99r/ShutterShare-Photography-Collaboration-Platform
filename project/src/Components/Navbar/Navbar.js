@@ -24,8 +24,8 @@ const Navbar = () => {
             <li><LinkScroll to="Hero" spy={true} smooth={true} offset={-100} duration={500} className='action'>Home</LinkScroll></li>
             <li><LinkScroll to="About" spy={true} smooth={true} offset={-100} duration={500} className='action'>About</LinkScroll></li>
             <li><LinkScroll to="Feature" spy={true} smooth={true} offset={-100} duration={500} className='action'>Feature</LinkScroll></li>
-            <button className='basic-btn' >Login</button>
-            <LinkRouter to="signup" ><button className='basic-btn'>Signup</button></LinkRouter>
+            <LinkRouter to="login" ><button className='basic-btn' >Login</button></LinkRouter>
+            <LinkRouter to="/choose" ><button className='basic-btn'>Signup</button></LinkRouter>
         </ul>
 
         

@@ -1,3 +1,4 @@
+import { Link as LinkRouter } from 'react-router-dom'
 import React from 'react'
 import './Choose.css'
 
@@ -10,8 +11,8 @@ const Choose = () => {
       </div>
       <div className='line-choose'></div>
       <div className='choose-select'>
-          <button className='ch-btn-ph'>Photographer</button>
-          <button className='ch-btn-cl'>Client</button>
+          <LinkRouter to="/photographersignup"><button className='ch-btn-ph'>Photographer</button></LinkRouter>
+          <LinkRouter to="/clientsignup"><button className='ch-btn-cl'>Client</button></LinkRouter>
       </div>
       
     </div>

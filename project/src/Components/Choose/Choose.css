@@ -31,9 +31,10 @@
     border-radius: 50px;
     font-size: 24px;
     cursor: pointer;
-    transition: .4s;
     margin: 10px 20px;
     margin-bottom: 10px;
+    transition: .3s;
+
 }
 
 .ch-btn-cl{
@@ -45,9 +46,10 @@
     border-radius: 50px;
     font-size: 24px;
     cursor: pointer;
-    transition: .4s;
     margin: 10px 20px;
     margin-bottom: 10px;
+    transition: .3s;
+
 }
 
 .ch-btn-ph:hover{

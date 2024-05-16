@@ -26,12 +26,14 @@
     font-weight: 500;
     color: white;
     background: rgba(82, 124, 217, 1);
-    border-style: none;
+    border: none;
+    outline: none;
     border-radius: 10px;
     padding: 20px 70px;
     text-align: center;
-    transition: .4s;
     cursor: pointer;
+    transition: .3s;
+
 }
 
 .hero-btn:hover{
@@ -39,6 +41,7 @@
 }
 
 .hero-btn:active{
+    transition: .1s;
     background: rgb(125, 164, 249);
 }
 
