@@ -11,7 +11,7 @@ const Hero = () => {
           platform and elevate your craft and 
           expand your reach with our unparalleled 
           networking opportunities.</p>
-        <Link to="/choose"><button className='hero-btn'><p>Get Started</p></button></Link>
+        <Link to="/login"><button className='hero-btn'><p>Get Started</p></button></Link>
       </div>
       
     </div>

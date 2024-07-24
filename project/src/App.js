@@ -9,8 +9,7 @@ import PhotographerContact from './Pages/PhotographerContact/PhotographerContact
 import ClientContact from './Pages/ClientContact/ClientContact';
 import ChoosePage from './Pages/ChoosePage/ChoosePage';
 import LoginPage from './Pages/LoginPage/LoginPage';
-import PhotographerSignup from './Pages/PhotographerSignup/PhotographerSignup';
-import ClientSignup from './Pages/ClientSignup/ClientSignup';
+import SignupPage from './Pages/SignupPage/SignupPage';
 
 function App() {
 
@@ -28,8 +27,7 @@ function App() {
           <Route path="/client/contact" element={<ClientContact/>}/>
           <Route path="/choose" element={<ChoosePage/>}/>
           <Route path="/login" element={<LoginPage/>}/>
-          <Route path="/photographersignup" element={<PhotographerSignup/>}/>
-          <Route path="/clientsignup" element={<ClientSignup/>}/>
+          <Route path="/signup" element={<SignupPage/>}/>
         </Routes>
 
       </BrowserRouter>
