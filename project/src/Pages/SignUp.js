@@ -85,12 +85,12 @@ function Signup() {
           <ul>
             <li><LinkRouter to="/" className='action'>Home</LinkRouter></li>
             <LinkRouter to="/login" style={{ textDecoration: 'none' }}>
-              <Button variant="outlined" color="primary" sx={{mr: 2, ml: 2, p: 1, borderRadius:'30px', width:'100px', border:'solid', borderWidth:2, '&:hover':{borderWidth:2}}}>
+              <Button variant="outlined" color="primary" sx={{mr: 2, ml: 2, p: 1, width:'100px', border:'solid', borderWidth:2, '&:hover':{borderWidth:2}}}>
                 Login
               </Button>
             </LinkRouter>
             <LinkRouter to="/signup" style={{ textDecoration: 'none' }}>
-              <Button variant="outlined" color="primary" sx={{p: 1, borderRadius:'30px', width:'100px', border:'solid', borderWidth:2, '&:hover':{borderWidth:2}}}>
+              <Button variant="outlined" color="primary" sx={{p: 1, width:'100px', border:'solid', borderWidth:2, '&:hover':{borderWidth:2}}}>
                 Signup
               </Button>
             </LinkRouter>

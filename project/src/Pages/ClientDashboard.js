@@ -7,6 +7,8 @@ import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, Card
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import Swal from 'sweetalert2';
+import { Link as LinkRouter } from 'react-router-dom';
+import logo from '../Assets/Logo2.png';
 
 function ClientDashboard() {
   const { currentUser } = useAuth();
@@ -201,6 +203,33 @@ function ClientDashboard() {
 
   return (
     <>
+      <div className='nav-section'>
+        <nav className='navbar-dash'>
+          <div className='logo-head'>
+            <img src={logo} alt="" className='logo'/>
+            <div className='logo-text'>
+              <h2>ShutterShare</h2>
+              <p>Future Photography</p>
+            </div>
+          </div>
+          <ul style={{ display: 'flex', alignItems: 'center', listStyleType: 'none', padding: 0 }}>
+              <LinkRouter to="/login" style={{ textDecoration: 'none' }}>
+                <Button variant="outlined" color="primary" sx={{ p: 1, width: '100px', border: 'solid', borderWidth: 2, '&:hover': { borderWidth: 2 } }}>
+                  Logout
+                </Button>
+              </LinkRouter>
+            
+            <li>
+              <Avatar src={profilePicture} alt="Profile Picture" sx={{ width: 50, height: 50, margin: '0 auto' }} />
+            </li>
+          </ul>
+        </nav>
+      </div>
+
+
+
+
+
       <Container component="main" maxWidth="xl">
         <Grid container spacing={4} sx={{ mt: 4 }}>
           <Grid item xs={12} md={3}>

@@ -3,6 +3,7 @@ import { Link as LinkRouter } from 'react-router-dom'
 import { Link as LinkScroll } from 'react-scroll'
 import './Navbar.css'
 import logo from '../../Assets/Logo2.png'
+import { Button } from '@mui/material'
 
 
 const Navbar = () => {
@@ -24,8 +25,16 @@ const Navbar = () => {
             <li><LinkScroll to="Hero" spy={true} smooth={true} offset={-100} duration={500} className='action'>Home</LinkScroll></li>
             <li><LinkScroll to="About" spy={true} smooth={true} offset={-100} duration={500} className='action'>About</LinkScroll></li>
             <li><LinkScroll to="Feature" spy={true} smooth={true} offset={-100} duration={500} className='action'>Feature</LinkScroll></li>
-            <LinkRouter to="/login" ><button className='basic-btn' >Login</button></LinkRouter>
-            <LinkRouter to="/signup" ><button className='basic-btn'>Signup</button></LinkRouter>
+            <LinkRouter to="/login" style={{ textDecoration: 'none' }}>
+              <Button variant="outlined" color="primary" sx={{mr: 2, ml: 2, p: 1, width:'100px', border:'solid', borderWidth:2, '&:hover':{borderWidth:2}}}>
+                Login
+              </Button>
+            </LinkRouter>
+            <LinkRouter to="/signup" style={{ textDecoration: 'none' }}>
+              <Button variant="outlined" color="primary" sx={{p: 1, width:'100px', border:'solid', borderWidth:2, '&:hover':{borderWidth:2}}}>
+                Signup
+              </Button>
+            </LinkRouter>
         </ul>
 
         
