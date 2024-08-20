@@ -1,2 +1,2 @@
 # Mini_Project
- Progress of the project - version 4 updated
+ Progress of the project - version 2
