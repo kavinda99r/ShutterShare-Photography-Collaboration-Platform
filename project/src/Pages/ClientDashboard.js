@@ -1,14 +1,16 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getDoc, doc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { getDoc, doc, collection, query, where, getDocs, updateDoc, setDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, Dialog, DialogTitle, DialogContent, DialogActions, Popover, Badge } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import Swal from 'sweetalert2';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import { Link as LinkRouter } from 'react-router-dom';
 import logo from '../Assets/Logo2.png';
+import Footer from '../Components/Footer/Footer';
 
 function ClientDashboard() {
   const { currentUser } = useAuth();
@@ -25,6 +27,14 @@ function ClientDashboard() {
   const [openDialog, setOpenDialog] = useState(false);
   const [viewImage, setViewImage] = useState(''); // State for viewing an image
   const [openImageDialog, setOpenImageDialog] = useState(false); // State for opening the image dialog
+  const [openBookingDialog, setOpenBookingDialog] = useState(false);
+  const [currentPhotographer, setCurrentPhotographer] = useState(null);
+  const [bookingStatus, setBookingStatus] = useState(''); // Pending or Accepted
+  const [notifications, setNotifications] = useState([]);
+  const [anchorEl, setAnchorEl] = useState(null);
+  
+  const [open, setOpen] = useState(false);
+
 
   useEffect(() => {
     const fetchData = async () => {
@@ -35,7 +45,10 @@ function ClientDashboard() {
 
       const photographersQuery = query(collection(db, 'users'), where('role', '==', 'photographer'));
       const querySnapshot = await getDocs(photographersQuery);
-      const photographers = querySnapshot.docs.map(doc => doc.data());
+      const photographers = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        uid: doc.id, // Add UID here
+      }));
       setAllPhotographers(photographers);
 
       // Fetch contacted photographers
@@ -44,7 +57,24 @@ function ClientDashboard() {
     };
 
     fetchData();
+    
   }, [currentUser]);
+
+  useEffect(() => {
+    const fetchContactedPhotographers = async () => {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        const userData = userDoc.data();
+        if (userData && userData.contacts) {
+          setContactedPhotographers(userData.contacts);
+        }
+      } catch (error) {
+        console.error('Error fetching contacts:', error);
+      }
+    };
+  
+    fetchContactedPhotographers();
+  }, [currentUser.uid]);
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
@@ -160,49 +190,290 @@ function ClientDashboard() {
   
   
   const handleContact = async (photographer) => {
-    // Check if the photographer is already contacted
-    const isAlreadyContacted = contactedPhotographers.some(contact => contact.username === photographer.username);
-  
-    if (isAlreadyContacted) {
-      // If already contacted, switch to the chat interface for that photographer
-      setSelectedPhotographer(photographer);
+    if (!photographer.uid) {
+      console.error('Photographer UID is missing');
       return;
     }
   
-    // If not already contacted, add them to the list and update Firestore
-    const updatedContacts = [...contactedPhotographers, photographer];
-    setContactedPhotographers(updatedContacts);
+    const isAlreadyContacted = contactedPhotographers.find(contact => contact.username === photographer.username);
   
-    try {
-      await updateDoc(doc(db, 'users', currentUser.uid), {
-        contacts: updatedContacts
-      });
-      setSelectedPhotographer(photographer);
-    } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+    if (isAlreadyContacted) {
+      setSelectedPhotographer(isAlreadyContacted);
+      return;
     }
+  
+    Swal.fire({
+      title: 'Are you sure?',
+      text: `Do you want to contact ${photographer.username}?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Yes, contact them!',
+      cancelButtonText: 'No, cancel'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        const updatedContacts = [...contactedPhotographers, { ...photographer, status: 'pending' }];
+        setContactedPhotographers(updatedContacts);
+  
+        // Generate a unique bookingId
+        const bookingId = `${currentUser.uid}_${photographer.uid}_${new Date().getTime()}`;
+  
+        const bookingRequest = {
+          bookingId: bookingId, // Include the bookingId here
+          status: 'pending',
+          photographerId: photographer.uid,
+          clientId: currentUser.uid,
+          timestamp: new Date(),
+          date: '', // Add booking date
+          time: '', // Add booking time
+          notes: '' // Add any additional notes
+        };
+  
+        try {
+          // Fetch current user details from Firestore if not available directly
+          let username = currentUser.username;
+          if (!username) {
+            const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+            username = userDoc.exists() ? userDoc.data().username : 'a client';
+          }
+  
+          // Update the contacts array in the main user document
+          await updateDoc(doc(db, 'users', currentUser.uid), {
+            contacts: updatedContacts
+          });
+  
+          // Create a booking document in the client's subcollection
+          const clientBookingRef = doc(db, `users/${currentUser.uid}/bookings/${bookingId}`);
+          await setDoc(clientBookingRef, bookingRequest);
+  
+          // Create a booking document in the photographer's subcollection
+          const photographerBookingRef = doc(db, `users/${photographer.uid}/bookings/${bookingId}`);
+          await setDoc(photographerBookingRef, bookingRequest);
+  
+          // Add a notification for the client
+          const clientNotificationRef = doc(db, `users/${currentUser.uid}/notifications/${new Date().getTime()}`);
+          await setDoc(clientNotificationRef, {
+            type: 'booking',
+            message: `Booking request sent to ${photographer.username}`,
+            status: 'pending',
+            timestamp: new Date(),
+            userId: currentUser.uid,
+            bookingId: bookingId // Include the bookingId in the notification
+          });
+  
+          // Add a notification for the photographer
+          const photographerNotificationRef = doc(db, `users/${photographer.uid}/notifications/${new Date().getTime()}`);
+          await setDoc(photographerNotificationRef, {
+            type: 'booking',
+            message: `New booking request from ${username}`, // Now includes the fetched username
+            status: 'pending',
+            timestamp: new Date(),
+            userId: currentUser.uid,
+            bookingId: bookingId // Include the bookingId in the notification
+          });
+  
+          Swal.fire('Success', 'Booking request sent!', 'success');
+          setSelectedPhotographer({ ...photographer, status: 'pending' });
+        } catch (error) {
+          Swal.fire('Error', error.message, 'error');
+        }
+      }
+    });
   };
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  useEffect(() => {
+    const fetchData = async () => {
+      const photographersQuery = query(collection(db, 'users'), where('role', '==', 'photographer'));
+      const querySnapshot = await getDocs(photographersQuery);
+      const photographers = querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        uid: doc.id, // Ensure uid is included
+      }));
+      setAllPhotographers(photographers);
+    };
+  
+    fetchData();
+  }, []);
+  
+  
+
+
+
   
   const handleBack = () => {
     setSelectedPhotographer(null);
   };
-
+  
   const handleContactClick = (photographer) => {
-    setSelectedPhotographer(photographer);
+    const existingContact = contactedPhotographers.find(contact => contact.username === photographer.username);
+    if (existingContact) {
+      setSelectedPhotographer(existingContact);
+    } else {
+      setSelectedPhotographer(photographer);
+    }
   };
+  
 
   const handleDeleteContact = async (photographer) => {
-    const updatedContacts = contactedPhotographers.filter(contact => contact.username !== photographer.username);
-    setContactedPhotographers(updatedContacts);
-
-    // Save updated contacts to Firestore
-    await updateDoc(doc(db, 'users', currentUser.uid), {
-      contacts: updatedContacts
-    });
+    try {
+      // Show confirmation dialog
+      const result = await Swal.fire({
+        title: 'Are you sure?',
+        text: `Do you want to delete ${photographer.username} from your contacts?`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Yes, delete it!',
+        cancelButtonText: 'No, cancel'
+      });
+  
+      if (result.isConfirmed) {
+        // Update local state
+        const updatedContacts = contactedPhotographers.filter(contact => contact.username !== photographer.username);
+        setContactedPhotographers(updatedContacts);
+  
+        // Save updated contacts to Firestore
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          contacts: updatedContacts
+        });
+  
+        Swal.fire('Deleted!', `${photographer.username} has been removed from your contacts.`, 'success');
+      }
+    } catch (error) {
+      console.error('Failed to delete contact:', error);
+      Swal.fire('Error', `Failed to delete contact: ${error.message}`, 'error');
+    }
   };
+
+
+
+
+  const handleDelete = async (notificationId) => {
+    try {
+      await deleteDoc(doc(db, `users/${currentUser.uid}/notifications`, notificationId));
+      setNotifications(prevNotifications =>
+        prevNotifications.filter(notification => notification.id !== notificationId)
+      );
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    }
+  };
+
+
+
+  const handleClick = (event) => {
+    setAnchorEl(event.currentTarget);
+    setOpen(true);
+    markNotificationsAsViewed(); // Mark notifications as viewed
+  };
+  
+  const handleClose = () => {
+    setOpen(false);
+  };
+
+
+  const markNotificationsAsViewed = async () => {
+    try {
+      const notificationsRef = collection(db, `users/${currentUser.uid}/notifications`);
+      const notificationsQuery = query(notificationsRef, where('viewed', '==', false));
+      const querySnapshot = await getDocs(notificationsQuery);
+
+      const updates = querySnapshot.docs.map(doc => {
+        return updateDoc(doc.ref, { viewed: true });
+      });
+
+      await Promise.all(updates);
+      setNotifications(prevNotifications =>
+        prevNotifications.map(notification => ({ ...notification, viewed: true }))
+      );
+    } catch (error) {
+      console.error('Error marking notifications as viewed:', error);
+    }
+  };
+
+
+
+
+
+
+
+
+
+
+
+  
+  const fetchBookingStatuses = async () => {
+    try {
+      const bookingsRef = collection(db, `users/${currentUser.uid}/bookings`);
+      const bookingsQuery = query(bookingsRef);
+      const querySnapshot = await getDocs(bookingsQuery);
+      
+      // Helper function to fetch photographer username
+      const fetchPhotographerUsername = async (photographerId) => {
+        try {
+          const photographerRef = doc(db, `users/${photographerId}`);
+          const photographerDoc = await getDoc(photographerRef);
+  
+          if (photographerDoc.exists()) {
+            return photographerDoc.data().username;
+          } else {
+            console.error('No such photographer found!');
+            return 'Unknown Photographer';
+          }
+        } catch (error) {
+          console.error('Error fetching photographer username:', error);
+          return 'Unknown Photographer';
+        }
+      };
+  
+      const bookingStatuses = await Promise.all(querySnapshot.docs.map(async doc => {
+        const booking = doc.data();
+        const photographerUsername = await fetchPhotographerUsername(booking.photographerId);
+  
+        let message = '';
+  
+        if (booking.status === 'accepted') {
+          message = `Booking accepted by ${photographerUsername}`;
+        } else if (booking.status === 'pending') {
+          message = `Booking request pending with ${photographerUsername}`;
+        }
+  
+        return {
+          id: doc.id,
+          message: message,
+          timestamp: booking.timestamp,
+          viewed: false // Add this field
+        };
+      }));
+  
+      setNotifications(bookingStatuses);
+    } catch (error) {
+      console.error('Error fetching booking statuses:', error);
+    }
+  };
+  
+  
+  
+
+  useEffect(() => {
+    fetchBookingStatuses();
+  }, [currentUser]);
+  
 
   return (
     <>
+
       <div className='nav-section'>
         <nav className='navbar-dash'>
           <div className='logo-head'>
@@ -213,12 +484,61 @@ function ClientDashboard() {
             </div>
           </div>
           <ul style={{ display: 'flex', alignItems: 'center', listStyleType: 'none', padding: 0 }}>
+
+            <li>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 2 }}>
+        <IconButton color="primary" onClick={handleClick}>
+          <Badge badgeContent={notifications.filter(notification => !notification.viewed).length} color="error">
+            <NotificationsIcon />
+          </Badge>
+        </IconButton>
+      </Box>
+
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={handleClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <Box sx={{ p: 2, width: '500px', maxHeight: 200, overflowY: 'auto' }}>
+          <Typography variant="h6">Notifications</Typography>
+          <List>
+            {notifications.length === 0 ? (
+              <Typography>No notifications</Typography>
+            ) : (
+              notifications.map((notification) => (
+                <ListItem key={notification.id} sx={{ display: 'flex', alignItems: 'center' }}>
+                  <ListItemText 
+                    primary={`${notification.message}`} 
+                    secondary={notification.timestamp ? new Date(notification.timestamp.seconds * 1000).toLocaleString() : ''}
+                  />
+                  <IconButton 
+                    color="error" 
+                    onClick={() => handleDelete(notification.id)}
+                  >
+                    <DeleteIcon /> {/* Remove icon */}
+                  </IconButton>
+                </ListItem>
+              ))
+            )}
+          </List>
+        </Box>
+      </Popover>
+            </li>
+            <li>
               <LinkRouter to="/login" style={{ textDecoration: 'none' }}>
                 <Button variant="outlined" color="primary" sx={{ p: 1, width: '100px', border: 'solid', borderWidth: 2, '&:hover': { borderWidth: 2 } }}>
                   Logout
                 </Button>
               </LinkRouter>
-            
+            </li>
             <li>
               <Avatar src={profilePicture} alt="Profile Picture" sx={{ width: 50, height: 50, margin: '0 auto' }} />
             </li>
@@ -230,8 +550,10 @@ function ClientDashboard() {
 
 
 
+
       <Container component="main" maxWidth="xl">
-        <Grid container spacing={4} sx={{ mt: 4 }}>
+      
+        <Grid container spacing={4} sx={{ mt: 4, mb: 4 }}>
           <Grid item xs={12} md={3}>
             <Card sx={{ p: 2, boxShadow: 3 }}>
               <CardContent>
@@ -248,6 +570,7 @@ function ClientDashboard() {
                     name="username"
                     autoComplete="username"
                     inputRef={usernameRef}
+                    InputLabelProps={{shrink: true,}}
                   />
                   <Button
                     type="submit"
@@ -264,7 +587,7 @@ function ClientDashboard() {
                   <Avatar src={profilePicture} alt="Profile Picture" sx={{ width: 100, height: 100, margin: '0 auto' }} />
                   <input type="file" onChange={handleFileChange} style={{ display: 'none' }} id="upload-file" />
                   <label htmlFor="upload-file">
-                    <Button variant="contained" color="primary" component="span" sx={{ mt: 2 }}>
+                    <Button variant="outlined" color="primary" component="span" sx={{ mt: 2, p: '12px 12px' }}>
                       Choose Profile Picture
                     </Button>
                   </label>
@@ -308,7 +631,7 @@ function ClientDashboard() {
           </Grid>
           <Grid item xs={12} md={9}>
             {!selectedPhotographer ? (
-              <Card sx={{ p: 2, boxShadow: 3 }}>
+              <Card sx={{ p: 2, boxShadow: 3, mb: 4 }}>
                 <CardContent>
                   <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
                     Search Photographers
@@ -378,50 +701,68 @@ function ClientDashboard() {
               </Card>
             ) : (
               <Card sx={{ p: 2, boxShadow: 3 }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold' }}>
-                      Chat with {selectedPhotographer.username}
-                    </Typography>
-                    <Button variant="outlined" color="primary" onClick={handleBack}>
-                      Back
-                    </Button>
-                  </Box>
-                  {/* Chat interface will go here */}
-                  <Box sx={{ mt: 2 }}>Chat interface</Box>
-                </CardContent>
-              </Card>
+    <CardContent>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold' }}>
+          Chat with {selectedPhotographer.username}
+        </Typography>
+        <Button variant="outlined" color="primary" onClick={handleBack}>
+          Back
+        </Button>
+      </Box>
+      <Box sx={{ mt: 2 }}>
+      
+        {/* Chat interface */}
+      </Box>
+    </CardContent>
+    </Card>
             )}
           </Grid>
         </Grid>
       </Container>
+      <Footer/>
 
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle>Photographer Details</DialogTitle>
-        <DialogContent>
-          {viewPhotographer && (
-            <>
-              <Avatar src={viewPhotographer.profilePicture} alt={viewPhotographer.username} sx={{ width: 100, height: 100, margin: '0 auto' }} />
-              <Typography variant="h6" component="div" sx={{ textAlign: 'center', mt: 1 }}>
-                {viewPhotographer.username}
+      <DialogTitle>
+        Photographer Details
+        <IconButton
+          edge="end"
+          color="inherit"
+          onClick={handleCloseDialog}
+          aria-label="close"
+          sx={{ position: 'absolute', right: 8, top: 8, mr: 1 }}
+        >
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent>
+        {viewPhotographer && (
+          <>
+            <Avatar
+              src={viewPhotographer.profilePicture}
+              alt={viewPhotographer.username}
+              sx={{ width: 100, height: 100, margin: '0 auto' }}
+            />
+            <Typography variant="h6" component="div" sx={{ textAlign: 'center', mt: 1 }}>
+              {viewPhotographer.username}
+            </Typography>
+            <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', mt: 1 }}>
+              {viewPhotographer.shortDescription}
+            </Typography>
+            <Typography variant="body1" color="textSecondary" align="center" sx={{ mt: 2 }}>
+              {viewPhotographer?.price ? `Price: $${viewPhotographer?.price}` : 'Price not available'}
+            </Typography>
+            <Typography variant="body1" color="textPrimary" sx={{ mt: 2 }}>
+              {viewPhotographer.detailedDescription}
+            </Typography>
+            <Box sx={{ mt: 4 }}>
+              <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+                Portfolio
               </Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', mt: 1 }}>
-                {viewPhotographer.shortDescription}
-              </Typography>
-              <Typography variant="body1" color="textSecondary" align="center" sx={{ mt: 2 }}>
-                {viewPhotographer?.price ? `Price: $${viewPhotographer?.price}` : 'Price not available'}
-              </Typography>
-              <Typography variant="body1" color="textPrimary" sx={{ mt: 2 }}>
-                {viewPhotographer.detailedDescription}
-              </Typography>
-              <Box sx={{ mt: 4 }}>
-                <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                  Portfolio
-                </Typography>
-                <Grid container spacing={2}>
-                  {viewPhotographer.portfolioImages && viewPhotographer.portfolioImages.length > 0 ? (
-                    viewPhotographer?.portfolioImages.slice(1).map((image, index) => (
-                      <Grid item xs={6} sm={3} key={index}>
+              <Grid container spacing={2}>
+                {viewPhotographer.portfolioImages && viewPhotographer.portfolioImages.length > 0 ? (
+                  viewPhotographer.portfolioImages.slice(1).map((image, index) => (
+                    <Grid item xs={6} sm={3} key={index}>
                       <Box
                         component="img"
                         src={image}
@@ -435,25 +776,30 @@ function ClientDashboard() {
                         onClick={() => handleImageClick(image)}
                       />
                     </Grid>
-                    ))
-                  ) : (
-                    <Typography>No portfolio images available</Typography>
-                  )}
-                </Grid>
-              </Box>
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog} color="primary">
-            Close
-          </Button>
-        </DialogActions>
+                  ))
+                ) : (
+                  <Typography>No portfolio images available</Typography>
+                )}
+              </Grid>
+            </Box>
+          </>
+        )}
+      </DialogContent>
       </Dialog>
 
       {/* Image Viewer Dialog */}
       <Dialog open={openImageDialog} onClose={handleCloseImageDialog} maxWidth="md" fullWidth>
-        <DialogTitle>View Image</DialogTitle>
+        <DialogTitle>View Image
+        <IconButton
+          edge="end"
+          color="inherit"
+          onClick={handleCloseImageDialog}
+          aria-label="close"
+          sx={{ position: 'absolute', right: 8, top: 8, mr: 1 }}
+        >
+          <CloseIcon />
+        </IconButton>
+        </DialogTitle>
         <DialogContent>
           {viewImage && (
             <Box sx={{ display: 'flex', justifyContent: 'center' }}>
@@ -462,11 +808,10 @@ function ClientDashboard() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseImageDialog} color="primary">
-            Close
-          </Button>
+          
         </DialogActions>
       </Dialog>
+      
     </>
   );
 }
