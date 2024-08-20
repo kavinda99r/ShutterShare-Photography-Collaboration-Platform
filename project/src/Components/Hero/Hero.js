@@ -1,6 +1,7 @@
 import React from 'react'
 import './Hero.css'
 import { Link } from 'react-router-dom'
+import { Button } from '@mui/material'
 
 const Hero = () => {
   return (
@@ -11,7 +12,21 @@ const Hero = () => {
           platform and elevate your craft and 
           expand your reach with our unparalleled 
           networking opportunities.</p>
-        <Link to="/login"><button className='hero-btn'><p>Get Started</p></button></Link>
+          <Link to="/login" style={{ textDecoration: 'none' }}>
+            <Button
+              variant="contained"
+              color="primary"
+              sx={{
+                padding: '15px 65px', // Adjust padding here
+                fontSize: '25px',
+                borderRadius: '5px',
+                textAlign: 'center',
+                textTransform: 'none'// To keep the text as it is without uppercase
+              }}
+            >
+              Get Started
+            </Button>
+          </Link>
       </div>
       
     </div>
