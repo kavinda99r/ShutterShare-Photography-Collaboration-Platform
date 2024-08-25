@@ -2,9 +2,9 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getDoc, doc, updateDoc, arrayUnion, arrayRemove, getDocs, collection, query, orderBy, deleteDoc, setDoc,addDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject,getStorage } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject,getStorage, listAll } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, Switch, FormControlLabel, List, ListItem, ListItemButton, ListItemAvatar,ListItemText, Badge, Popover } from '@mui/material';
+import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, Switch, FormControlLabel, List, ListItem, ListItemButton, ListItemAvatar,ListItemText, Badge, Popover, CircularProgress } from '@mui/material';
 import Swal from 'sweetalert2';
 import { Delete as DeleteIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -37,6 +37,14 @@ function PhotographerDashboard() {
   const [filePreviews, setFilePreviews] = useState([]);
   const [previewUrls, setPreviewUrls] = useState([]);
   const [uploadedImages, setUploadedImages] = useState([]);
+  const [clientSelectedImages, setClientSelectedImages] = useState([]);
+  const [buttonText, setButtonText] = useState('Upload Images');
+  const [removing, setRemoving] = useState(false);
+  const [removeButtonText, setRemoveButtonText] = useState('Remove All Images'); 
+  const [sending, setSending] = useState(false);
+  const [sendButtonText, setSendButtonText] = useState('Send Images');
+  
+  
 
   useEffect(() => {
     const fetchData = async () => {
@@ -109,6 +117,7 @@ useEffect(() => {
 
       const downloadURLs = await Promise.all(uploadPromises);
 
+      // Assuming we only update with the first file's URL
       await updateDoc(doc(db, 'users', currentUser.uid), {
         profilePicture: downloadURLs[0]
       });
@@ -117,9 +126,9 @@ useEffect(() => {
       Swal.fire('Success', 'Profile picture updated!', 'success');
     } catch (error) {
       Swal.fire('Error', `Failed to upload profile picture: ${error.message}`, 'error');
+    } finally {
+      setLoading(false); // Ensure loading is stopped even if an error occurs
     }
-
-    setLoading(false);
   };
 
   const handleImageUpload = async () => {
@@ -194,7 +203,6 @@ useEffect(() => {
     setLoading(true);
 
     try {
-
       const newUsername = usernameRef.current.value;
       if (!newUsername) {
         Swal.fire('Error', 'Username cannot be empty', 'error');
@@ -216,9 +224,9 @@ useEffect(() => {
       Swal.fire('Success', 'Profile updated!', 'success');
     } catch (error) {
       Swal.fire('Error', `Failed to update profile: ${error.message}`, 'error');
+    } finally {
+      setLoading(false); // Ensure loading is stopped even if an error occurs
     }
-
-    setLoading(false);
   };
 
 
@@ -226,8 +234,7 @@ useEffect(() => {
     e.preventDefault();
     setLoading(true);
 
-    try {  
-
+    try {
       await updateDoc(doc(db, 'users', currentUser.uid), {
         shortDescription: shortDescriptionRef.current.value,
         detailedDescription: detailedDescriptionRef.current.value,
@@ -237,11 +244,10 @@ useEffect(() => {
       Swal.fire('Success', 'Profile updated!', 'success');
     } catch (error) {
       Swal.fire('Error', `Failed to update profile: ${error.message}`, 'error');
+    } finally {
+      setLoading(false); // Ensure loading state is stopped even if an error occurs
     }
-
-    setLoading(false);
-
-  }
+  };
 
 
   const handleAvailabilityChange = async (event) => {
@@ -350,6 +356,14 @@ useEffect(() => {
   
       await updateDoc(photographerRef, { contactedClients: updatedClients });
   
+      // Update the client's notification status to "accepted"
+      const clientNotificationRef = doc(db, `users/${userId}/notifications/${notificationId}`);
+      await updateDoc(clientNotificationRef, {
+        message: `Booking accepted by ${photographerData.username}`,
+        status: 'accepted',
+        timestamp: new Date()
+      });
+  
       // Delete the notification after processing
       await deleteDoc(notificationRef);
   
@@ -365,6 +379,7 @@ useEffect(() => {
       Swal.fire('Error', `Failed to accept booking: ${error.message}`, 'error');
     }
   };
+  
   
   
 
@@ -436,6 +451,20 @@ const handleClose = () => {
 const handleBackClick = () => {
   setSelectedContact(null);
   setViewMode('default'); // Switch back to default view
+
+  const fetchData = async () => {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      const userData = userDoc.data();
+      usernameRef.current.value = userData.username;
+      shortDescriptionRef.current.value = userData.shortDescription || '';
+      detailedDescriptionRef.current.value = userData.detailedDescription || '';
+      priceRef.current.value = userData.price || ''; // Update price details
+    } catch (error) {
+      Swal.fire('Error', 'Failed to load user data', 'error');
+    }
+  };
+  fetchData();
 };
 
 
@@ -454,48 +483,43 @@ const handleFileChangeSharing = (event) => {
 };
 
 const handleRemoveAllImages = async () => {
-  const storage = getStorage();
+  setRemoving(true);
+  setRemoveButtonText('Removing...'); // Update button text during the process
 
   try {
-    // Remove all uploaded images from Firebase Storage
-    await Promise.all(
-      uploadedImages.map(async (image) => {
-        const imageRef = ref(storage, `sharedImages/${currentUser.uid}/${image.fileName}`);
-        try {
-          await deleteObject(imageRef);
-        } catch (error) {
-          console.error('Error removing image from storage:', error);
-        }
-      })
-    );
+    const storagePath = `sharedImages/${currentUser.uid}/${selectedContact.clientId}`;
+    const firestoreCollectionPath = `users/${currentUser.uid}/sharedImages/${selectedContact.clientId}/images`;
+    const sharingDocPathPhotographer = `users/${currentUser.uid}/sharing/${selectedContact.clientId}`;
+    const sharingDocPathClient = `users/${selectedContact.clientId}/sharing/${currentUser.uid}`;
 
-    // Remove all image metadata from Firestore
-    const photographerImagesRef = collection(db, `users/${currentUser.uid}/sharedImages`);
-    const clientImagesRef = collection(db, `users/${selectedContact.clientId}/sharedImages`);
-    
-    // Delete image metadata from Firestore
+    // Step 1: Delete all images from Firebase Storage
+    const storageRef = ref(storage, storagePath);
+    const listResponse = await listAll(storageRef);
+    const deletePromises = listResponse.items.map((itemRef) => deleteObject(itemRef));
+
+    await Promise.all(deletePromises);
+
+    // Step 2: Delete all related image records from Firestore
+    const imagesCollectionRef = collection(db, firestoreCollectionPath);
+    const imagesSnapshot = await getDocs(imagesCollectionRef);
+    const firestoreDeletePromises = imagesSnapshot.docs.map((docSnapshot) => deleteDoc(docSnapshot.ref));
+
+    await Promise.all(firestoreDeletePromises);
+
+    // Step 3: Remove the sharing documents from both users' Firestore collections
     await Promise.all([
-      deleteDocsFromCollection(photographerImagesRef),
-      deleteDocsFromCollection(clientImagesRef)
+      deleteDoc(doc(db, sharingDocPathPhotographer)),
+      deleteDoc(doc(db, sharingDocPathClient)),
     ]);
 
-    // Clear local state
-    setFiles([]);
-    setPreviewUrls([]);
-    setUploadedImages([]);
-    
-    Swal.fire('Success', 'All images have been removed successfully!', 'success');
+    Swal.fire('Success', 'All images and sharing information have been removed successfully!', 'success');
   } catch (error) {
-    console.error('Error removing images:', error);
+    console.error('Error removing all images:', error);
     Swal.fire('Error', `Failed to remove images: ${error.message}`, 'error');
+  } finally {
+    setRemoving(false); // Reset loading state
+    setRemoveButtonText('Remove All Images'); // Reset button text after the process
   }
-};
-
-// Helper function to delete all documents from a Firestore collection
-const deleteDocsFromCollection = async (collectionRef) => {
-  const querySnapshot = await getDocs(collectionRef);
-  const deletePromises = querySnapshot.docs.map((doc) => deleteDoc(doc.ref));
-  await Promise.all(deletePromises);
 };
 
 
@@ -507,27 +531,25 @@ const handleSendImages = async () => {
       return;
     }
 
-    // Use client ID as sharingId for photographer's side and photographer ID as sharingId for client's side
-    const photographerSharingId = selectedContact.clientId; // Use the client's ID as the sharingId for the photographer
-    const clientSharingId = currentUser.uid; // Use the photographer's ID as the sharingId for the client
+    setSending(true);
+    setSendButtonText('Sending'); // Update button text to "Sending..."
 
-    // References for photographer and client sharing sub-collections
+    const photographerSharingId = selectedContact.clientId;
+    const clientSharingId = currentUser.uid;
+
     const photographerSharingRef = doc(db, `users/${currentUser.uid}/sharing`, photographerSharingId);
     const clientSharingRef = doc(db, `users/${selectedContact.clientId}/sharing`, clientSharingId);
 
-    // Upload each file to Firebase Storage
     const storage = getStorage();
     const uploadedFiles = await Promise.all(files.map(async (file) => {
-      const fileId = uuidv4(); // Unique ID for each file
-      const storageRef = ref(storage, `sharedImages/${currentUser.uid}/${fileId}`);
+      const fileId = uuidv4();
+      const storageRef = ref(storage, `sentImages/${currentUser.uid}/${file.name}`);
       await uploadBytes(storageRef, file);
 
-      // Get the file's download URL
       const downloadURL = await getDownloadURL(storageRef);
       return { fileName: file.name, url: downloadURL };
     }));
 
-    // Save the shared file URLs in Firestore for both the photographer and the client
     const sharingData = {
       sharedBy: currentUser.uid,
       sharedWith: selectedContact.clientId,
@@ -543,21 +565,27 @@ const handleSendImages = async () => {
   } catch (error) {
     console.error('Error sharing images:', error);
     Swal.fire('Error', `Failed to share images: ${error.message}`, 'error');
+  } finally {
+    setSending(false); // Stop loading
+    setSendButtonText('Send Images'); // Reset button text
   }
 };
 
 
 
 
+
 const handleUploadImagesSharing = async () => {
+  setLoading(true);
+  setButtonText('Uploading'); // Change button text to "Uploading..."
   try {
+    const storage = getStorage();
     const uploadPromises = files.map(async (file) => {
       const imageId = uuidv4();
       const imageRef = ref(storage, `sharedImages/${currentUser.uid}/${imageId}`);
       const uploadResult = await uploadBytes(imageRef, file);
       const imageUrl = await getDownloadURL(uploadResult.ref);
 
-      // Save image metadata in Firestore
       const imageMetadata = {
         url: imageUrl,
         name: file.name,
@@ -565,14 +593,11 @@ const handleUploadImagesSharing = async () => {
         createdAt: new Date(),
       };
 
-      // Save image metadata under the `sharedImages` sub-collection
-      const photographerSharingRef = doc(db, `users/${currentUser.uid}/sharedImages/${imageId}`);
-      await setDoc(photographerSharingRef, imageMetadata);
+      const imagesPath = `users/${currentUser.uid}/sharedImages/${selectedContact.clientId}/images`;
+      const imageRefInFirestore = doc(collection(db, imagesPath));
+      await setDoc(imageRefInFirestore, imageMetadata);
 
-      const clientSharingRef = doc(db, `users/${selectedContact.clientId}/sharedImages/${imageId}`);
-      await setDoc(clientSharingRef, imageMetadata);
-
-      return imageMetadata; // Return the metadata to update preview
+      return imageMetadata;
     });
 
     const uploadedImages = await Promise.all(uploadPromises);
@@ -582,14 +607,21 @@ const handleUploadImagesSharing = async () => {
   } catch (error) {
     console.error('Failed to upload images:', error);
     Swal.fire('Error', `Failed to upload images: ${error.message}`, 'error');
+  } finally {
+    setLoading(false);
+    setButtonText('Upload Images'); // Reset button text after upload
   }
 };
 
 
+
 const fetchUploadedImages = async () => {
+  if (!currentUser || !selectedContact) return;
+
   try {
-    const sharedImagesRef = collection(db, `users/${currentUser.uid}/sharedImages`);
-    const querySnapshot = await getDocs(sharedImagesRef);
+    const imagesPath = `users/${currentUser.uid}/sharedImages/${selectedContact.clientId}/images`;
+    const imagesRef = collection(db, imagesPath);
+    const querySnapshot = await getDocs(imagesRef);
 
     const images = querySnapshot.docs.map((doc) => doc.data());
     setUploadedImages(images);
@@ -598,18 +630,26 @@ const fetchUploadedImages = async () => {
   }
 };
 
-// Call this function when the user logs in or component mounts
+// Call this function when the selected contact changes or the current user updates
 useEffect(() => {
-  fetchUploadedImages();
-}, [currentUser]);
+  if (selectedContact && currentUser) {
+    fetchUploadedImages();
+  }
+}, [selectedContact, currentUser]);
+
+
+
+
 
 const fetchUploadedImagesForClient = async () => {
   if (!selectedContact || !currentUser) return;
 
   try {
-    const clientSharedImagesRef = collection(db, `users/${selectedContact.clientId}/sharedImages`);
-    const querySnapshot = await getDocs(clientSharedImagesRef);
+    // Define the path to fetch images from, based on the contact IDs
+    const imagesRef = collection(db, `users/${selectedContact.clientId}/sharedImages/${currentUser.uid}`);
+    const querySnapshot = await getDocs(imagesRef);
 
+    // Map the documents to extract image data
     const clientImages = querySnapshot.docs.map((doc) => doc.data());
     setUploadedImages(clientImages);
   } catch (error) {
@@ -617,20 +657,85 @@ const fetchUploadedImagesForClient = async () => {
   }
 };
 
-// Call this function when the selected contact changes
+// Call this function when the selected contact changes or the current user updates
 useEffect(() => {
-  fetchUploadedImagesForClient();
+  if (selectedContact && currentUser) {
+    fetchUploadedImagesForClient();
+  }
 }, [selectedContact, currentUser]);
 
 
 
 
 
-  return (
-    
-    <>
+const fetchClientSelectedImages = async () => {
+  if (!selectedContact || !currentUser) {
+    console.log('Selected contact or current user is missing.');
+    return;
+  }
 
-    <div className='nav-section'>
+  try {
+    const clientSelectedImagesRef = doc(db, `users/${currentUser.uid}/receivedImages/${selectedContact.clientId}`);
+    const clientDocSnapshot = await getDoc(clientSelectedImagesRef);
+
+    if (clientDocSnapshot.exists()) {
+      const imagesData = clientDocSnapshot.data().images || {};
+      const imagesArray = Object.keys(imagesData).map(key => imagesData[key]);
+
+      console.log('Fetched client selected images:', imagesArray);
+
+      setClientSelectedImages(imagesArray);
+    } else {
+      console.log('No images found for the client.');
+      setClientSelectedImages([]);
+    }
+  } catch (error) {
+    console.error("Error fetching client's selected images: ", error);
+  }
+};
+
+useEffect(() => {
+  fetchClientSelectedImages();
+}, [selectedContact, currentUser]);
+
+
+
+
+
+const handleRemoveImages = async () => {
+  if (!selectedContact || !currentUser || clientSelectedImages.length === 0) {
+    Swal.fire('No images to remove', 'There are no images to delete.', 'info');
+    return;
+  }
+
+  try {
+    // Remove the images metadata from Firestore
+    const clientSelectedImagesRef = doc(
+      db,
+      `users/${currentUser.uid}/receivedImages/${selectedContact.clientId}`
+    );
+
+    await updateDoc(clientSelectedImagesRef, {
+      images: {}, // Clear out all the images metadata
+    });
+
+    // Update UI to reflect the removed images
+    setClientSelectedImages([]);
+
+    Swal.fire('Success', 'All selected images have been removed successfully!', 'success');
+  } catch (error) {
+    console.error('Error removing images:', error);
+    Swal.fire('Error', `Failed to remove images: ${error.message}`, 'error');
+  }
+};
+
+
+
+
+  return (
+
+  <>
+        <div className='nav-section'>
         <nav className='navbar-dash'>
           <div className='logo-head'>
             <img src={logo} alt="" className='logo'/>
@@ -723,6 +828,7 @@ useEffect(() => {
 
 
 
+
     <Container component="main" maxWidth="xl">
       
       <Grid container spacing={4} sx={{ mt: 4 }}>
@@ -749,34 +855,48 @@ useEffect(() => {
                   label="Available"
                 />
                 <Button
-                  type="submit"
-                  fullWidth
-                  variant="contained"
-                  color="primary"
-                  disabled={loading}
-                  sx={{ mt: 3, mb: 2, p: '12px 12px' }}
-                >
-                  
-                  Update Profile
-                </Button>
+      type="submit"
+      fullWidth
+      variant="contained"
+      color="primary"
+      disabled={loading} // Disable button during loading
+      sx={{ mt: 2, mb: 2, p: '12px 12px', position: 'relative' }}
+    >
+      {loading ? (
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <CircularProgress size={24} sx={{ color: 'inherit', mr: 1 }} />
+          Updating
+        </Box>
+      ) : (
+        'Update Profile'
+      )}
+    </Button>
               </Box>
               <Box sx={{ mt: 4, textAlign: 'center' }}>
                 <Avatar src={profilePicture} alt="Profile Picture" sx={{ width: 100, height: 100, margin: '0 auto' }} />
                 <input type="file" onChange={handleFileChange} style={{ display: 'none' }} id="upload-file" multiple />
                 <label htmlFor="upload-file">
-                  <Button variant="outlined" color="primary" component="span" sx={{ mt: 2, p: '12px 12px' }}>
+                  <Button variant="outlined" color="primary" fullWidth component="span" sx={{ mt: 2, p: '12px 12px' }}>
                     Choose Profile Picture
                   </Button>
                 </label>
                 <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={handleUpload}
-                  disabled={loading || files.length === 0}
-                  sx={{ mt: 2, p: '12px 12px' }}
-                >
-                  Upload Profile Picture
-                </Button>
+      variant="contained"
+      color="primary"
+      fullWidth
+      onClick={handleUpload}
+      disabled={loading || files.length === 0} // Disable if loading or no files
+      sx={{ mt: 2, p: '12px 12px', position: 'relative'}}
+    >
+      {loading ? (
+        <Box sx={{ display: 'flex', alignItems: 'center',}}>
+          <CircularProgress size={24} sx={{ color: 'inherit', mr: 1 }} />
+          Uploading
+        </Box>
+      ) : (
+        'Upload Profile Picture'
+      )}
+    </Button>
               </Box>
               <Box sx={{ mt: 4 }}>
                 <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
@@ -809,123 +929,234 @@ useEffect(() => {
 
         <Grid item xs={12} md={9} sx={{ flexBasis: '75%' }}>
         
-          <Card sx={{ p: 2, boxShadow: 3, mb: 4 }}>
+          <Card sx={{ p: 2, boxShadow: 3, mb: 4}}>
             <CardContent sx={{ position: 'relative' }}>  
             {viewMode === 'contactDetails' && selectedContact ? (
-                <>
-                  <Button
-                    variant="outlined"
-                    color="primary"
-                    onClick={handleBackClick}
-                    sx={{
+      <>
+        <Button
+          variant="outlined"
+          color="primary"
+          onClick={handleBackClick}
+          sx={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            mt: 1,
+            mr: 1,
+          }}
+        >
+          Back
+        </Button>
+        <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+          Contact Details
+        </Typography>
+
+        <Typography variant="body1" sx={{ mb: 2 }}>
+          Contact with {selectedContact.username}
+        </Typography>
+
+        <Box sx={{ mt: 2 }}>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
+            id="add-images"
+            multiple
+          />
+          <label htmlFor="add-images">
+            <Button
+              variant="outlined"
+              color="primary"
+              component="span"
+              sx={{ mr: 1, p: '8px 16px' }}
+            >
+              Add Images
+            </Button>
+          </label>
+          <Button
+      variant="outlined"
+      color="primary"
+      onClick={handleUploadImagesSharing}
+      disabled={files.length === 0 || loading}
+      sx={{ mr: 1, p: '8px 16px', position: 'relative' }}
+    >
+      {loading ? (
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <CircularProgress size={24} sx={{ color: 'inherit', mr: 1 }} />
+          {buttonText}
+        </Box>
+      ) : (
+        buttonText
+      )}
+    </Button>
+    <Button
+      variant="outlined"
+      color="error"
+      onClick={handleRemoveAllImages}
+      disabled={removing}
+      sx={{ mr: 1, p: '8px 16px', position: 'relative' }} // Maintain consistent button padding and size
+    >
+      {removing ? (
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <CircularProgress size={24} sx={{ color: 'inherit', mr: 1 }} />
+          {removeButtonText}
+        </Box>
+      ) : (
+        removeButtonText
+      )}
+    </Button>
+    <Button
+      variant="contained"
+      color="primary"
+      onClick={handleSendImages}
+      disabled={sending || files.length === 0} // Disable when sending or no files are selected
+      sx={{ p: '8px 16px', position: 'relative' }}
+    >
+      {sending ? (
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <CircularProgress size={24} sx={{ color: 'inherit', mr: 1 }} />
+          {sendButtonText}
+        </Box>
+      ) : (
+        sendButtonText
+      )}
+    </Button>
+        </Box>
+
+        <Box
+          sx={{
+            mt: 2,
+            maxHeight: '300px', // Limit height for scrollable area
+            overflowY: 'auto', // Enable scrolling when content exceeds max height
+            border: '1px solid #ccc',
+            p: 2,
+            borderRadius: 2,
+          }}
+        >
+          <Grid container spacing={2}>
+            {previewUrls.map((url, index) => (
+              <Grid item xs={3} key={index}> {/* Each image takes up 3 out of 12 columns (4 images per row) */}
+                <Box
+                  component="img"
+                  src={url}
+                  alt={`Preview ${index + 1}`}
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    borderRadius: 1,
+                  }}
+                />
+              </Grid>
+            ))}
+            {/* Display already uploaded images */}
+            {uploadedImages.length === 0 ? (
+  <Grid item xs={12}>
+    <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center' }}>
+        No images uploaded.
+      </Typography>
+  </Grid>
+) : (
+  uploadedImages.map((image, index) => (
+    <Grid item xs={3} key={index + previewUrls.length}> {/* Offset index for unique keys */}
+      <Box
+    sx={{
+    width: '100%',
+    height: 0,
+    paddingTop: '100%', // Maintains square aspect ratio
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 1,
+  }}
+>
+  <img
+    src={image.url}
+    alt={`Uploaded Image ${index + 1}`}
+    style={{
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+      objectFit: 'cover',
+      borderRadius: '5px',
+    }}
+  />
+</Box>
+    </Grid>
+  ))
+)}
+          </Grid>
+        </Box>
+
+        {/* New Section for Client's Selected Images */}
+        <Box sx={{ mt: 4 }}>
+      <Typography component="h3" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+        Client's Selected Images
+      </Typography>
+
+      <Box
+        sx={{
+          maxHeight: '300px', // Limit height for scrollable area
+          overflowY: 'auto', // Enable scrolling when content exceeds max height
+          border: '1px solid #ccc',
+          p: 2,
+          borderRadius: 2,
+          mb: 2, // Add some margin to separate the Remove button
+        }}
+      >
+        <Grid container spacing={2}>
+          {clientSelectedImages.length > 0 ? (
+            clientSelectedImages.map((image, index) => (
+              <Grid item xs={3} key={index}>
+                <Box
+                  sx={{
+                    width: '100%',
+                    height: 0,
+                    paddingTop: '100%', // Maintains square aspect ratio
+                    position: 'relative',
+                    overflow: 'hidden',
+                    borderRadius: 1,
+                  }}
+                >
+                  <img
+                    src={image.url} // Ensure 'url' is the correct property name
+                    alt={`Client Selected Image ${index + 1}`}
+                    style={{
                       position: 'absolute',
                       top: 0,
-                      right: 0,
-                      mt: 1,
-                      mr: 1,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      borderRadius: '5px',
                     }}
-                  >
-                    Back
-                  </Button>
-                  <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                    Contact Details
-                  </Typography>
+                  />
+                </Box>
+              </Grid>
+            ))
+          ) : (
+            <Grid item xs={12}>
+              <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center' }}>
+                No images selected by the client.
+              </Typography>
+            </Grid>
+          )}
+        </Grid>
+      </Box>
 
-                  <Typography variant="body1" sx={{ mb: 2 }}>
-                    Contact with {selectedContact.username}
-                  </Typography>
-
-                  <Box sx={{ mt: 2 }}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                      style={{ display: 'none' }}
-                      id="add-images"
-                      multiple
-                    />
-                    <label htmlFor="add-images">
-                      <Button
-                        variant="outlined"
-                        color="primary"
-                        component="span"
-                        sx={{ mr: 1, p: '8px 16px' }}
-                      >
-                        Add Images
-                      </Button>
-                    </label>
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      onClick={handleUploadImagesSharing}
-                      disabled={files.length === 0}
-                      sx={{ mr: 1, p: '8px 16px' }}
-                    >
-                      Upload Images
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      onClick={handleRemoveAllImages}
-                      sx={{ mr: 1, p: '8px 16px' }}
-                    >
-                      Remove All Images
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={handleSendImages}
-                      disabled={uploadedImages.length === 0}
-                      sx={{ p: '8px 16px' }}
-                    >
-                      Send Images
-                    </Button>
-                  </Box>
-
-                  <Box
-                    sx={{
-                      mt: 2,
-                      maxHeight: '300px', // Limit height for scrollable area
-                      overflowY: 'auto', // Enable scrolling when content exceeds max height
-                      border: '1px solid #ccc',
-                      p: 2,
-                      borderRadius: 2,
-                    }}
-                  >
-                    <Grid container spacing={2}>
-                      {previewUrls.map((url, index) => (
-                        <Grid item xs={3} key={index}> {/* Each image takes up 3 out of 12 columns (4 images per row) */}
-                          <Box
-                            component="img"
-                            src={url}
-                            alt={`Preview ${index + 1}`}
-                            sx={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                              borderRadius: 1,
-                            }}
-                          />
-                        </Grid>
-                      ))}
-                      {/* Display already uploaded images */}
-                      {uploadedImages.map((image, index) => (
-                        <Grid item xs={3} key={index + previewUrls.length}> {/* Offset index for unique keys */}
-                          <Box
-                            component="img"
-                            src={image.url}
-                            alt={`Uploaded Image ${index + 1}`}
-                            sx={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                              borderRadius: 1,
-                            }}
-                          />
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </Box>
+      {/* Remove All Images Button */}
+      {clientSelectedImages.length > 0 && (
+        <Button
+          variant="contained"
+          color="secondary"
+          onClick={handleRemoveImages}
+        >
+          Remove All Images
+        </Button>
+      )}
+    </Box>
                 </>
               ) : (
                 <>
@@ -968,14 +1199,22 @@ useEffect(() => {
                   InputLabelProps={{shrink: true,}}
                 />
                 <Button
-                  type="submit"
-                  variant="contained"
-                  color="primary"
-                  disabled={loading}
-                  sx={{ mt: 3, mb: 2, p: '12px 12px' }}
-                >
-                  Update Descriptions
-                </Button>
+      type="submit"
+      variant="contained"
+      color="primary"
+      onClick={handleUpdatedescription}
+      disabled={loading} // Disable button during loading
+      sx={{ mt: 3, mb: 2, p: '12px 12px', position: 'relative', width: '300px' }} // Preserve button padding and size
+    >
+      {loading ? (
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <CircularProgress size={24} sx={{ color: 'inherit', mr: 1 }} />
+          Updating
+        </Box>
+      ) : (
+        'Update Descriptions'
+      )}
+    </Button>
               </Box>
           
           
@@ -1085,7 +1324,7 @@ useEffect(() => {
         </DialogActions>
       </Dialog>
     </Container>
-    <Footer/>
+    <Footer/>     
     </>
   );
 }

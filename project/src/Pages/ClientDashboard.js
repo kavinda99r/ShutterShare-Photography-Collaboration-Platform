@@ -1,9 +1,9 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getDoc, doc, collection, query, where, getDocs, updateDoc, setDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { getDoc, doc, collection, query, where, getDocs, updateDoc, setDoc, addDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, Dialog, DialogTitle, DialogContent, DialogActions, Popover, Badge } from '@mui/material';
+import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, Dialog, DialogTitle, DialogContent, DialogActions, Popover, Badge, Checkbox, CircularProgress } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import Swal from 'sweetalert2';
@@ -21,7 +21,7 @@ function ClientDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [allPhotographers, setAllPhotographers] = useState([]);
-  const [selectedPhotographer, setSelectedPhotographer] = useState(null);
+  const [selectedPhotographer, setSelectedPhotographer] = useState();
   const [contactedPhotographers, setContactedPhotographers] = useState([]);
   const [viewPhotographer, setViewPhotographer] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
@@ -32,8 +32,13 @@ function ClientDashboard() {
   const [bookingStatus, setBookingStatus] = useState(''); // Pending or Accepted
   const [notifications, setNotifications] = useState([]);
   const [anchorEl, setAnchorEl] = useState(null);
-  
+  const [sharedImages, setSharedImages] = useState([]);
   const [open, setOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('search'); // 'search' or 'contactDetails'
+  const [selectedContact, setSelectedContact] = useState(null);
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [selectedImage, setSelectedImage] = useState('');
+  
 
 
   useEffect(() => {
@@ -97,10 +102,10 @@ function ClientDashboard() {
       setProfilePicture(downloadURL);
       Swal.fire('Success', 'Profile picture updated!', 'success');
     } catch (error) {
-      Swal.fire('Error', error.message, 'error');
+      Swal.fire('Error', `Failed to upload profile picture: ${error.message}`, 'error');
+    } finally {
+      setLoading(false); // Ensure loading state is reset even if an error occurs
     }
-
-    setLoading(false);
   };
 
 
@@ -198,7 +203,9 @@ function ClientDashboard() {
     const isAlreadyContacted = contactedPhotographers.find(contact => contact.username === photographer.username);
   
     if (isAlreadyContacted) {
-      setSelectedPhotographer(isAlreadyContacted);
+      // Set the contact view and photographer directly if already contacted
+      setSelectedContact(isAlreadyContacted);
+      setViewMode('contactDetails');
       return;
     }
   
@@ -220,7 +227,7 @@ function ClientDashboard() {
         const bookingId = `${currentUser.uid}_${photographer.uid}_${new Date().getTime()}`;
   
         const bookingRequest = {
-          bookingId: bookingId, // Include the bookingId here
+          bookingId: bookingId,
           status: 'pending',
           photographerId: photographer.uid,
           clientId: currentUser.uid,
@@ -252,35 +259,59 @@ function ClientDashboard() {
           await setDoc(photographerBookingRef, bookingRequest);
   
           // Add a notification for the client
-          const clientNotificationRef = doc(db, `users/${currentUser.uid}/notifications/${new Date().getTime()}`);
+          const clientNotificationRef = doc(db, `users/${currentUser.uid}/notifications/${bookingId}`);
           await setDoc(clientNotificationRef, {
             type: 'booking',
-            message: `Booking request sent to ${photographer.username}`,
+            message: `Booking request pending with ${photographer.username}`,
             status: 'pending',
             timestamp: new Date(),
             userId: currentUser.uid,
-            bookingId: bookingId // Include the bookingId in the notification
+            bookingId: bookingId
           });
   
           // Add a notification for the photographer
-          const photographerNotificationRef = doc(db, `users/${photographer.uid}/notifications/${new Date().getTime()}`);
+          const photographerNotificationRef = doc(db, `users/${photographer.uid}/notifications/${bookingId}`);
           await setDoc(photographerNotificationRef, {
             type: 'booking',
-            message: `New booking request from ${username}`, // Now includes the fetched username
+            message: `New booking request from ${username}`,
             status: 'pending',
             timestamp: new Date(),
             userId: currentUser.uid,
-            bookingId: bookingId // Include the bookingId in the notification
+            bookingId: bookingId
           });
   
           Swal.fire('Success', 'Booking request sent!', 'success');
-          setSelectedPhotographer({ ...photographer, status: 'pending' });
+          setSelectedContact({ ...photographer, status: 'pending' });
+          setViewMode('contactDetails');
+  
+          // Listen for booking status updates in real-time
+          const unsubscribe = onSnapshot(photographerBookingRef, async (docSnapshot) => {
+            if (docSnapshot.exists()) {
+              const updatedBooking = docSnapshot.data();
+              if (updatedBooking.status === 'accepted') {
+                // Update the client's notification when the status is "accepted"
+                const clientNotificationUpdateRef = doc(db, `users/${currentUser.uid}/notifications/${bookingId}`);
+                await updateDoc(clientNotificationUpdateRef, {
+                  message: `Booking accepted by ${photographer.username}`,
+                  status: 'accepted',
+                  timestamp: new Date()
+                });
+  
+                // Optionally: Refresh notifications in state for real-time updates
+                fetchNotifications();
+              }
+            }
+          });
+  
+          // Cleanup listener when done
+          return () => unsubscribe();
         } catch (error) {
           Swal.fire('Error', error.message, 'error');
         }
       }
     });
   };
+  
   
   
   
@@ -310,17 +341,25 @@ function ClientDashboard() {
 
 
   
-  const handleBack = () => {
-    setSelectedPhotographer(null);
+  const handleContactClick = async (photographer) => {
+    setSelectedContact(photographer);
+    setViewMode('contactDetails');
+    
+    setLoading(true);
+  
+    try {
+      const images = await fetchSharedImagesByPhotographer(photographer.id);
+      setSharedImages(images);
+    } catch (error) {
+      console.error('Error fetching images:', error);
+    } finally {
+      setLoading(false);
+    }
   };
   
-  const handleContactClick = (photographer) => {
-    const existingContact = contactedPhotographers.find(contact => contact.username === photographer.username);
-    if (existingContact) {
-      setSelectedPhotographer(existingContact);
-    } else {
-      setSelectedPhotographer(photographer);
-    }
+  const handleBack = () => {
+    setSelectedContact(null);
+    setViewMode('search');
   };
   
 
@@ -418,7 +457,7 @@ function ClientDashboard() {
       const bookingsRef = collection(db, `users/${currentUser.uid}/bookings`);
       const bookingsQuery = query(bookingsRef);
       const querySnapshot = await getDocs(bookingsQuery);
-      
+  
       // Helper function to fetch photographer username
       const fetchPhotographerUsername = async (photographerId) => {
         try {
@@ -437,38 +476,242 @@ function ClientDashboard() {
         }
       };
   
-      const bookingStatuses = await Promise.all(querySnapshot.docs.map(async doc => {
-        const booking = doc.data();
-        const photographerUsername = await fetchPhotographerUsername(booking.photographerId);
+      const bookingStatuses = await Promise.all(
+        querySnapshot.docs.map(async (doc) => {
+          const booking = doc.data();
+          const photographerUsername = await fetchPhotographerUsername(booking.photographerId);
   
-        let message = '';
+          let message = '';
   
-        if (booking.status === 'accepted') {
-          message = `Booking accepted by ${photographerUsername}`;
-        } else if (booking.status === 'pending') {
-          message = `Booking request pending with ${photographerUsername}`;
-        }
+          if (booking.status === 'accepted') {
+            message = `Booking accepted by ${photographerUsername}`;
+          } else if (booking.status === 'pending') {
+            message = `Booking request pending with ${photographerUsername}`;
+          }
   
-        return {
-          id: doc.id,
-          message: message,
-          timestamp: booking.timestamp,
-          viewed: false // Add this field
-        };
-      }));
+          const notification = {
+            id: doc.id,
+            message: message,
+            timestamp: booking.timestamp,
+            viewed: false, // Add this field
+          };
   
+          // Save the notification to Firestore under `notifications` collection
+          const notificationsRef = doc(db, `users/${currentUser.uid}/notifications/${doc.id}`);
+          await setDoc(notificationsRef, notification);
+  
+          return notification;
+        })
+      );
+  
+      // Set notifications to state
       setNotifications(bookingStatuses);
     } catch (error) {
       console.error('Error fetching booking statuses:', error);
     }
   };
   
-  
-  
-
   useEffect(() => {
     fetchBookingStatuses();
   }, [currentUser]);
+  
+
+
+
+
+
+
+
+
+  useEffect(() => {
+    const fetchSharedImages = async () => {
+      try {
+        // Check if selectedPhotographer and currentUser are defined
+        if (!selectedPhotographer || !selectedPhotographer.photographerId || !currentUser || !currentUser.uid) {
+          console.log('Required data is missing');
+          return;
+        }
+
+        // Reference to the shared document in Firestore
+        const clientSharingRef = doc(db, `users/${currentUser.uid}/sharing/${selectedPhotographer.photographerId}`);
+        const docSnap = await getDoc(clientSharingRef);
+
+        if (docSnap.exists()) {
+          // Extract the images from the document data
+          const sharedData = docSnap.data();
+          if (sharedData.images) {
+            setSharedImages(sharedData.images); // Set the images in state
+          }
+        } else {
+          console.log('No shared images found.');
+        }
+      } catch (error) {
+        console.error('Error fetching shared images:', error);
+      }
+    };
+
+    fetchSharedImages();
+  }, [selectedPhotographer, currentUser]);
+
+
+
+
+
+
+
+
+  const fetchNotifications = async () => {
+    const notificationsRef = collection(db, `users/${currentUser.uid}/notifications`);
+    const notificationsQuery = query(notificationsRef);
+  
+    onSnapshot(notificationsQuery, (snapshot) => {
+      const notifications = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+  
+      setNotifications(notifications);
+    });
+  };
+  
+  useEffect(() => {
+    if (currentUser) {
+      fetchNotifications();
+    }
+  }, [currentUser]);
+
+
+
+
+
+  useEffect(() => {
+    if (!selectedContact || !currentUser) return;
+  
+    const fetchSharedImages = async () => {
+      try {
+        // Reference the specific sharing document
+        const sharingDocRef = doc(db, `users/${currentUser.uid}/sharing/${selectedContact.uid}`);
+        const docSnapshot = await getDoc(sharingDocRef);
+  
+        if (docSnapshot.exists()) {
+          const imagesData = docSnapshot.data().images;
+  
+          if (imagesData) {
+            // Extract image URLs and filter out duplicates using a Set
+            const imageUrls = Array.from(new Set(
+              Object.values(imagesData).map((image) => image.url)
+            ));
+  
+            setSharedImages(imageUrls);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching shared images: ", error);
+      }
+    };
+  
+    fetchSharedImages();
+  }, [selectedContact, currentUser]);
+
+
+
+  const handleImageSelect = (url) => {
+    setSelectedImages((prevSelected) =>
+      prevSelected.includes(url)
+        ? prevSelected.filter((image) => image !== url) // Unselect if already selected
+        : [...prevSelected, url] // Add to selected images
+    );
+  };
+
+  const handleSendImagesToPhotographer = async () => {
+    if (selectedImages.length === 0) {
+      Swal.fire('Warning', 'No images selected.', 'warning');
+      return;
+    }
+
+    setLoading(true); // Start loading state
+
+    try {
+      const photographerId = selectedContact.uid; // Photographer's ID
+      const clientId = currentUser.uid; // Client's ID
+      const timestamp = new Date().toISOString();
+
+      // Reference the documents for both the photographer and client
+      const photographerReceivedImagesRef = doc(db, `users/${photographerId}/receivedImages/${clientId}`);
+      const clientReceivedImagesRef = doc(db, `users/${clientId}/receivedImages/${photographerId}`);
+
+      // Fetch the current images for the photographer
+      const photographerDocSnapshot = await getDoc(photographerReceivedImagesRef);
+      const photographerImagesData = photographerDocSnapshot.exists()
+        ? photographerDocSnapshot.data().images || {}
+        : {};
+
+      // Fetch the current images for the client
+      const clientDocSnapshot = await getDoc(clientReceivedImagesRef);
+      const clientImagesData = clientDocSnapshot.exists()
+        ? clientDocSnapshot.data().images || {}
+        : {};
+
+      // Convert existing images to a Set for easy duplicate checking
+      const existingPhotographerUrls = new Set(Object.values(photographerImagesData).map((img) => img.url));
+      const existingClientUrls = new Set(Object.values(clientImagesData).map((img) => img.url));
+
+      selectedImages.forEach((url) => {
+        if (!existingPhotographerUrls.has(url) && !existingClientUrls.has(url)) {
+          const imageName = url.split('/').pop(); // Extract file name from URL
+          const imageData = {
+            fileName: imageName,
+            url: url,
+            timestamp: timestamp,
+          };
+
+          // Add the image to both photographer and client documents
+          photographerImagesData[Object.keys(photographerImagesData).length] = imageData;
+          clientImagesData[Object.keys(clientImagesData).length] = imageData;
+
+          // Update the existing URL sets to avoid future duplicates
+          existingPhotographerUrls.add(url);
+          existingClientUrls.add(url);
+        }
+      });
+
+      // Save the updated images to Firestore
+      await Promise.all([
+        setDoc(photographerReceivedImagesRef, { images: photographerImagesData }, { merge: true }),
+        setDoc(clientReceivedImagesRef, { images: clientImagesData }, { merge: true }),
+      ]);
+
+      Swal.fire('Success', 'Selected images have been sent!', 'success');
+      setSelectedImages([]); // Clear the selection after sending
+    } catch (error) {
+      console.error('Error sending images:', error);
+      Swal.fire('Error', `Failed to send images: ${error.message}`, 'error');
+    } finally {
+      setLoading(false); // Ensure loading state is reset even if an error occurs
+    }
+  };
+  
+  
+  
+  
+  const fetchSharedImagesByPhotographer = async (photographerId) => {
+    try {
+      const imagesRef = collection(db, 'images');
+      const q = query(imagesRef, where('photographerId', '==', photographerId));
+      const querySnapshot = await getDocs(q);
+  
+      const images = querySnapshot.docs.map(doc => doc.data());
+      return images;
+    } catch (error) {
+      console.error('Error fetching images:', error);
+      return [];
+    }
+  };
+  
+  
+  
+  
+  
   
 
   return (
@@ -508,7 +751,6 @@ function ClientDashboard() {
         }}
       >
         <Box sx={{ p: 2, width: '500px', maxHeight: 200, overflowY: 'auto' }}>
-          <Typography variant="h6">Notifications</Typography>
           <List>
             {notifications.length === 0 ? (
               <Typography>No notifications</Typography>
@@ -548,14 +790,11 @@ function ClientDashboard() {
 
 
 
-
-
-
       <Container component="main" maxWidth="xl">
       
-        <Grid container spacing={4} sx={{ mt: 4, mb: 4 }}>
+        <Grid container spacing={4} sx={{ mt: 4 }}>
           <Grid item xs={12} md={3}>
-            <Card sx={{ p: 2, boxShadow: 3 }}>
+            <Card sx={{ p: 2, boxShadow: 3, mb: 4 }}>
               <CardContent>
                 <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
                   Profile Details
@@ -573,33 +812,48 @@ function ClientDashboard() {
                     InputLabelProps={{shrink: true,}}
                   />
                   <Button
-                    type="submit"
-                    fullWidth
-                    variant="contained"
-                    color="primary"
-                    disabled={loading}
-                    sx={{ mt: 3, mb: 2, p: '12px 12px' }}
-                  >
-                    Update Profile
-                  </Button>
+      type="submit"
+      fullWidth
+      variant="contained"
+      color="primary"
+      disabled={loading} // Disable button during loading
+      sx={{ mt: 3, mb: 2, p: '12px 12px', position: 'relative' }} // Preserve button padding and size
+    >
+      {loading ? (
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <CircularProgress size={24} sx={{ color: 'inherit', mr: 1 }} />
+          Updating
+        </Box>
+      ) : (
+        'Update Profile'
+      )}
+    </Button>
                 </Box>
                 <Box sx={{ mt: 4, textAlign: 'center' }}>
                   <Avatar src={profilePicture} alt="Profile Picture" sx={{ width: 100, height: 100, margin: '0 auto' }} />
                   <input type="file" onChange={handleFileChange} style={{ display: 'none' }} id="upload-file" />
                   <label htmlFor="upload-file">
-                    <Button variant="outlined" color="primary" component="span" sx={{ mt: 2, p: '12px 12px' }}>
+                    <Button variant="outlined" color="primary" component="span" fullWidth sx={{ mt: 2, p: '12px 12px' }}>
                       Choose Profile Picture
                     </Button>
                   </label>
                   <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handleUpload}
-                    disabled={loading || !file}
-                    sx={{ mt: 2, p: '12px 12px' }}
-                  >
-                    Upload Profile Picture
-                  </Button>
+      variant="contained"
+      color="primary"
+      fullWidth
+      onClick={handleUpload}
+      disabled={loading || !file} // Disable button if loading or no file is selected
+      sx={{ mt: 2, p: '12px 12px', position: 'relative' }} // Preserve button padding and size
+    >
+      {loading ? (
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <CircularProgress size={24} sx={{ color: 'inherit', mr: 1 }} />
+          Uploading
+        </Box>
+      ) : (
+        'Upload Profile Picture'
+      )}
+    </Button>
                 </Box>
                 {/* Messages Section */}
                 <Box sx={{ mt: 4 }}>
@@ -630,99 +884,205 @@ function ClientDashboard() {
             </Card>
           </Grid>
           <Grid item xs={12} md={9}>
-            {!selectedPhotographer ? (
-              <Card sx={{ p: 2, boxShadow: 3, mb: 4 }}>
+  {viewMode === 'search' && (
+    <Card sx={{ p: 2, boxShadow: 3, mb: 4 }}>
+      <CardContent>
+        <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+          Search Photographers
+        </Typography>
+        <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+          <TextField
+            fullWidth
+            id="search"
+            label="Search by Username"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSearch}
+            disabled={loading}
+            sx={{ ml: 2, p: '12px 12px' }}
+          >
+            Search
+          </Button>
+          {searchResults.length > 0 && (
+            <IconButton color="secondary" onClick={handleCloseSearchResults}>
+              <CloseIcon />
+            </IconButton>
+          )}
+        </Box>
+        <Grid container spacing={2}>
+          {(searchResults.length > 0 ? searchResults : allPhotographers).map((photographer, index) => (
+            <Grid item xs={12} sm={6} md={4} key={index}>
+              <Card sx={{ boxShadow: 3 }}>
                 <CardContent>
-                  <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-                    Search Photographers
+                  <Avatar
+                    src={photographer.profilePicture}
+                    alt={photographer.username}
+                    sx={{ width: 80, height: 80, margin: '0 auto' }}
+                  />
+                  <Typography variant="h6" component="div" sx={{ textAlign: 'center', mt: 1 }}>
+                    {photographer.username}
                   </Typography>
-                  <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                    <TextField
-                      fullWidth
-                      id="search"
-                      label="Search by Username"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={handleSearch}
-                      disabled={loading}
-                      sx={{ ml: 2, p: '12px 12px' }}
-                    >
-                      Search
-                    </Button>
-                    {searchResults.length > 0 && (
-                      <IconButton color="secondary" onClick={handleCloseSearchResults}>
-                        <CloseIcon />
-                      </IconButton>
-                    )}
-                  </Box>
-                  <Grid container spacing={2}>
-                    {(searchResults.length > 0 ? searchResults : allPhotographers).map((photographer, index) => (
-                      <Grid item xs={12} sm={6} md={4} key={index}>
-                        <Card sx={{ boxShadow: 3 }}>
-                          <CardContent>
-                            <Avatar src={photographer.profilePicture} alt={photographer.username} sx={{ width: 80, height: 80, margin: '0 auto' }} />
-                            <Typography variant="h6" component="div" sx={{ textAlign: 'center', mt: 1 }}>
-                              {photographer.username}
-                            </Typography>
-                            <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', mt: 1 }}>
-                              {photographer.shortDescription}
-                            </Typography>
-                            <Typography color="text.secondary" sx={{ textAlign: 'center', color: photographer.isAvailable ? 'green' : 'red' }}>
-                                {photographer.isAvailable ? 'Available' : 'Not Available'}
-                              </Typography>
-                            <Button
-                              variant="contained"
-                              color="primary"
-                              fullWidth
-                              sx={{ mt: 2, p: '12px 12px' }}
-                              onClick={() => handleContact(photographer)}
-                            >
-                              Contact
-                            </Button>
-                            <Button
-                              variant="outlined"
-                              color="primary"
-                              fullWidth
-                              sx={{ mt: 1, p: '12px 12px' }}
-                              onClick={() => handleViewDetails(photographer)}
-                            >
-                              View Details
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      </Grid>
-                    ))}
-                  </Grid>
+                  <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center', mt: 1 }}>
+                    {photographer.shortDescription}
+                  </Typography>
+                  <Typography
+                    color="text.secondary"
+                    sx={{ textAlign: 'center', color: photographer.isAvailable ? 'green' : 'red' }}
+                  >
+                    {photographer.isAvailable ? 'Available' : 'Not Available'}
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    fullWidth
+                    sx={{ mt: 2, p: '12px 12px' }}
+                    onClick={() => handleContact(photographer)}
+                  >
+                    Contact
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    fullWidth
+                    sx={{ mt: 1, p: '12px 12px' }}
+                    onClick={() => handleViewDetails(photographer)}
+                  >
+                    View Details
+                  </Button>
                 </CardContent>
               </Card>
-            ) : (
-              <Card sx={{ p: 2, boxShadow: 3 }}>
-    <CardContent>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold' }}>
-          Chat with {selectedPhotographer.username}
-        </Typography>
-        <Button variant="outlined" color="primary" onClick={handleBack}>
-          Back
-        </Button>
-      </Box>
-      <Box sx={{ mt: 2 }}>
-      
-        {/* Chat interface */}
-      </Box>
-    </CardContent>
-    </Card>
-            )}
-          </Grid>
+            </Grid>
+          ))}
         </Grid>
+      </CardContent>
+    </Card>
+  )}
+
+{viewMode === 'contactDetails' && selectedContact && (
+        <Card sx={{ p: 2, boxShadow: 3 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold' }}>
+                Chat with {selectedContact.username}
+              </Typography>
+              <Button variant="outlined" color="primary" onClick={handleBack}>
+                Back
+              </Button>
+            </Box>
+            <Box sx={{ mt: 2 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleSendImagesToPhotographer}
+              disabled={loading || selectedImages.length === 0} // Disable button during loading or if no images are selected
+              sx={{ mt: 2, p: '8px 16px', position: 'relative', width: '250px' }} // Preserve button padding and size
+            >
+              {loading ? (
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <CircularProgress size={24} sx={{ color: 'inherit', mr: 1 }} />
+                  Sending...
+                </Box>
+              ) : (
+                'Send Selected Images'
+              )}
+            </Button>
+
+              <Grid container spacing={2}>
+                {sharedImages.map((image, index) => (
+                  <Grid item xs={12} sm={6} md={4} key={index}>
+                    <img
+                      src={image.url}
+                      alt={image.fileName}
+                      style={{ width: '100%', height: 'auto', borderRadius: '8px' }}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+              <Box
+                sx={{
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  border: '1px solid #ccc',
+                  p: 2,
+                  borderRadius: 2,
+                  mt: sharedImages.length > 0 ? 0 : 4,
+                }}
+              >
+                <Grid container spacing={2}>
+                  {sharedImages.length > 0 ? (
+                    sharedImages.map((url, index) => (
+                      <Grid item xs={12} sm={6} md={3} key={index} sx={{ position: 'relative' }}>
+                        <Box
+                          sx={{
+                            width: '100%',
+                            height: 0,
+                            paddingTop: '100%',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            borderRadius: 1,
+                          }}
+                        >
+                          <img
+                            src={url}
+                            alt={`Shared Image ${index}`}
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              borderRadius: '5px',
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => handleImageClick(url)}
+                          />
+                          <Checkbox
+                            checked={selectedImages.includes(url)}
+                            onChange={() => handleImageSelect(url)}
+                            sx={{
+                              position: 'absolute',
+                              top: 8,
+                              right: 8,
+                              borderRadius: '50%',
+                              padding: '4px',
+                              zIndex: 1,
+                            }}
+                          />
+                        </Box>
+                      </Grid>
+                    ))
+                  ) : (
+                    <Grid item xs={12}>
+                      <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center'}}>
+                        No images shared yet.
+                      </Typography>
+                    </Grid>
+                  )}
+                </Grid>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
+      
+</Grid>
+</Grid>
+
       </Container>
       <Footer/>
 
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth 
+      PaperProps={{
+        sx: {
+          borderRadius: '8px', // Set the border radius here
+        },
+      }}>
       <DialogTitle>
         Photographer Details
         <IconButton
@@ -752,39 +1112,52 @@ function ClientDashboard() {
             <Typography variant="body1" color="textSecondary" align="center" sx={{ mt: 2 }}>
               {viewPhotographer?.price ? `Price: $${viewPhotographer?.price}` : 'Price not available'}
             </Typography>
-            <Typography variant="body1" color="textPrimary" sx={{ mt: 2 }}>
-              {viewPhotographer.detailedDescription}
-            </Typography>
-            <Box sx={{ mt: 4 }}>
+
+            {/* Detailed Description Section with Border */}
+            <Box sx={{ border: '1px solid #ccc', borderRadius: '8px', padding: 2, mt: 3 }}>
+              <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+                Description
+              </Typography>
+              <Typography variant="body1" color="textPrimary" sx={{ mt: 2 }}>
+                {viewPhotographer.detailedDescription}
+              </Typography>
+            </Box>
+
+            {/* Portfolio Section with Border and Scroll */}
+            <Box sx={{ border: '1px solid #ccc', borderRadius: '8px', padding: 2, mt: 4 }}>
               <Typography component="h2" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
                 Portfolio
               </Typography>
-              <Grid container spacing={2}>
-                {viewPhotographer.portfolioImages && viewPhotographer.portfolioImages.length > 0 ? (
-                  viewPhotographer.portfolioImages.slice(1).map((image, index) => (
-                    <Grid item xs={6} sm={3} key={index}>
-                      <Box
-                        component="img"
-                        src={image}
-                        alt={`Portfolio Image ${index}`}
-                        sx={{
-                          width: '100%',
-                          height: '200px',
-                          objectFit: 'cover',
-                          cursor: 'pointer',
-                        }}
-                        onClick={() => handleImageClick(image)}
-                      />
-                    </Grid>
-                  ))
-                ) : (
-                  <Typography>No portfolio images available</Typography>
-                )}
-              </Grid>
+              <Box sx={{ maxHeight: 400, overflowY: 'auto' }}> {/* Set the maximum height and enable scrolling */}
+                <Grid container spacing={2}>
+                  {viewPhotographer.portfolioImages && viewPhotographer.portfolioImages.length > 0 ? (
+                    viewPhotographer.portfolioImages.slice(1).map((image, index) => (
+                      <Grid item xs={6} sm={3} key={index}>
+                        <Box
+                          component="img"
+                          src={image}
+                          alt={`Portfolio Image ${index}`}
+                          sx={{
+                            width: '100%',
+                            height: '200px',
+                            objectFit: 'cover',
+                            cursor: 'pointer',
+                            borderRadius: '5px'
+                          }}
+                          onClick={() => handleImageClick(image)}
+                        />
+                      </Grid>
+                    ))
+                  ) : (
+                    <Typography sx={{mt: 2, ml:2}}>No portfolio images available</Typography>
+                  )}
+                </Grid>
+              </Box>
             </Box>
           </>
         )}
       </DialogContent>
+      <Box sx={{ padding: '5px', width: '100%', backgroundColor: '#1976D2' }} />
       </Dialog>
 
       {/* Image Viewer Dialog */}
