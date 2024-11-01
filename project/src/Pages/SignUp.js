@@ -25,6 +25,7 @@ function Signup() {
     setRole(event.target.value);
   };
 
+  // Check username already exists
   const checkUsernameExists = async (username) => {
     const userCollection = collection(db, "users");
     const q = query(userCollection, where("username", "==", username));
@@ -32,6 +33,7 @@ function Signup() {
     return !userSnapshot.empty;
   };
 
+  // Signup
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (

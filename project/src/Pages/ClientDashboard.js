@@ -1,3 +1,4 @@
+// src/components/ClientDashboard.js
 import React, { useRef, useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getDoc, doc, collection, query, where, getDocs, updateDoc, setDoc, addDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
@@ -39,6 +40,7 @@ function ClientDashboard() {
   const [selectedImages, setSelectedImages] = useState([]);
   const [selectedImage, setSelectedImage] = useState("");
 
+  // fetchData
   useEffect(() => {
     const fetchData = async () => {
       const userDoc = await getDoc(doc(db, "users", currentUser.uid));
@@ -53,7 +55,7 @@ function ClientDashboard() {
       const querySnapshot = await getDocs(photographersQuery);
       const photographers = querySnapshot.docs.map((doc) => ({
         ...doc.data(),
-        uid: doc.id, // Add UID here
+        uid: doc.id,
       }));
       setAllPhotographers(photographers);
 
@@ -65,6 +67,7 @@ function ClientDashboard() {
     fetchData();
   }, [currentUser]);
 
+  // fetchContactedPhotographers
   useEffect(() => {
     const fetchContactedPhotographers = async () => {
       try {
@@ -81,10 +84,71 @@ function ClientDashboard() {
     fetchContactedPhotographers();
   }, [currentUser.uid]);
 
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setSearchResults(allPhotographers); // Show all photographers when search is empty
+    } else {
+      const filteredResults = allPhotographers.filter((photographer) =>
+        photographer.username.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+
+      setSearchResults(filteredResults);
+    }
+  }, [searchQuery, allPhotographers]);
+
+  /* const handleSearch = async () => {
+    if (!searchQuery) return;
+
+    setLoading(true);
+
+    try {
+      const photographersQuery = query(
+        collection(db, "users"),
+        where("role", "==", "photographer")
+      );
+      const querySnapshot = await getDocs(photographersQuery);
+      const results = querySnapshot.docs
+        .map((doc) => doc.data())
+        .filter((user) =>
+          user.username.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+      setSearchResults(results);
+    } catch (error) {
+      Swal.fire("Error", error.message, "error");
+    }
+
+    setLoading(false);
+  }; */
+
+  const handleCloseSearchResults = () => {
+    setSearchQuery(""); // Clear the search input
+    setSearchResults(allPhotographers); // Reset to show all photographers
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const photographersQuery = query(
+        collection(db, "users"),
+        where("role", "==", "photographer")
+      );
+      const querySnapshot = await getDocs(photographersQuery);
+      const photographers = querySnapshot.docs.map((doc) => ({
+        ...doc.data(),
+        uid: doc.id, // Ensure uid is included
+      }));
+      setAllPhotographers(photographers);
+    };
+
+    fetchData();
+  }, []);
+
+  // HandleFileChange
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
   };
 
+  // Upload profile picture
   const handleUpload = async () => {
     if (!file) return;
 
@@ -115,6 +179,7 @@ function ClientDashboard() {
     }
   };
 
+  // Check username exists
   const checkUsernameExists = async (username) => {
     const userCollection = collection(db, "users");
     const q = query(userCollection, where("username", "==", username));
@@ -122,6 +187,7 @@ function ClientDashboard() {
     return !userSnapshot.empty;
   };
 
+  // Update user
   const handleUpdate = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -152,49 +218,6 @@ function ClientDashboard() {
     }
 
     setLoading(false);
-  };
-
-
-  useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setSearchResults(allPhotographers); // Show all photographers when search is empty
-    } else {
-      const filteredResults = allPhotographers.filter((photographer) =>
-        photographer.username.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-
-      setSearchResults(filteredResults);
-    }
-  }, [searchQuery, allPhotographers]);
-
-  const handleSearch = async () => {
-    if (!searchQuery) return;
-
-    setLoading(true);
-
-    try {
-      const photographersQuery = query(
-        collection(db, "users"),
-        where("role", "==", "photographer")
-      );
-      const querySnapshot = await getDocs(photographersQuery);
-      const results = querySnapshot.docs
-        .map((doc) => doc.data())
-        .filter((user) =>
-          user.username.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-
-      setSearchResults(results);
-    } catch (error) {
-      Swal.fire("Error", error.message, "error");
-    }
-
-    setLoading(false);
-  };
-
-  const handleCloseSearchResults = () => {
-    setSearchQuery(''); // Clear the search input
-    setSearchResults(allPhotographers); // Reset to show all photographers
   };
 
   const handleViewDetails = (photographer) => {
@@ -358,23 +381,6 @@ function ClientDashboard() {
     });
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const photographersQuery = query(
-        collection(db, "users"),
-        where("role", "==", "photographer")
-      );
-      const querySnapshot = await getDocs(photographersQuery);
-      const photographers = querySnapshot.docs.map((doc) => ({
-        ...doc.data(),
-        uid: doc.id, // Ensure uid is included
-      }));
-      setAllPhotographers(photographers);
-    };
-
-    fetchData();
-  }, []);
-
   const handleContactClick = async (photographer) => {
     setSelectedContact(photographer);
     setViewMode("contactDetails");
@@ -487,6 +493,7 @@ function ClientDashboard() {
     }
   };
 
+  // fetchBookingStatuses
   const fetchBookingStatuses = async () => {
     try {
       const bookingsRef = collection(db, `users/${currentUser.uid}/bookings`);
@@ -555,6 +562,7 @@ function ClientDashboard() {
     fetchBookingStatuses();
   }, [currentUser]);
 
+  // fetchSharedImages
   useEffect(() => {
     const fetchSharedImages = async () => {
       try {
@@ -593,6 +601,7 @@ function ClientDashboard() {
     fetchSharedImages();
   }, [selectedPhotographer, currentUser]);
 
+  // fetchNotifications
   const fetchNotifications = async () => {
     const notificationsRef = collection(
       db,
@@ -616,6 +625,7 @@ function ClientDashboard() {
     }
   }, [currentUser]);
 
+  // fetchSharedImages
   useEffect(() => {
     if (!selectedContact || !currentUser) return;
 
@@ -765,8 +775,7 @@ function ClientDashboard() {
 
   return (
     <>
-
-{/*======================================  Navbar section  ======================================*/}
+      {/*======================================  Navbar section  ======================================*/}
       <div className="nav-section">
         <nav className="navbar-dash">
           <div className="logo-head">
@@ -782,7 +791,7 @@ function ClientDashboard() {
               alignItems: "center",
               listStyleType: "none",
               padding: 0,
-              gap: "0px"
+              gap: "0px",
             }}
           >
             <li>
@@ -1013,103 +1022,114 @@ function ClientDashboard() {
             </Card>
           </Grid>
           <Grid item xs={12} md={9}>
-      {viewMode === 'search' && (
-        <Card sx={{ p: 2, boxShadow: 3, mb: 4 }}>
-          <CardContent>
-            <Typography
-              component="h2"
-              variant="h6"
-              sx={{ fontWeight: 'bold', mb: 2 }}
-            >
-              Search Photographers
-            </Typography>
-            <Box sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-              <TextField
-                fullWidth
-                id="search"
-                label="Search by Username"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <IconButton color="secondary" onClick={handleCloseSearchResults}>
-                  <CloseIcon />
-                </IconButton>
-              )}
-            </Box>
+            {viewMode === "search" && (
+              <Card sx={{ p: 2, boxShadow: 3, mb: 4 }}>
+                <CardContent>
+                  <Typography
+                    component="h2"
+                    variant="h6"
+                    sx={{ fontWeight: "bold", mb: 2 }}
+                  >
+                    Search Photographers
+                  </Typography>
+                  <Box sx={{ mb: 2, display: "flex", alignItems: "center" }}>
+                    <TextField
+                      fullWidth
+                      id="search"
+                      label="Search by Username"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    {searchQuery && (
+                      <IconButton
+                        color="secondary"
+                        onClick={handleCloseSearchResults}
+                      >
+                        <CloseIcon />
+                      </IconButton>
+                    )}
+                  </Box>
 
-            {/* Displaying search results or message */}
-            <Grid container spacing={2}>
-              {searchResults.length > 0 ? (
-                searchResults.map((photographer, index) => (
-                  <Grid item xs={12} sm={6} md={4} key={index}>
-                    <Card sx={{ boxShadow: 3 }}>
-                      <CardContent>
-                        <Avatar
-                          src={photographer.profilePicture}
-                          alt={photographer.username}
-                          sx={{ width: 80, height: 80, margin: '0 auto' }}
-                        />
-                        <Typography
-                          variant="h6"
-                          component="div"
-                          sx={{ textAlign: 'center', mt: 1 }}
-                        >
-                          {photographer.username}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="textSecondary"
-                          sx={{ textAlign: 'center', mt: 1 }}
-                        >
-                          {photographer.shortDescription}
-                        </Typography>
-                        <Typography
-                          color="text.secondary"
-                          sx={{
-                            textAlign: 'center',
-                            color: photographer.isAvailable ? 'green' : 'red',
-                          }}
-                        >
-                          {photographer.isAvailable ? 'Available' : 'Not Available'}
-                        </Typography>
-                        <Button
-                          variant="contained"
-                          color="primary"
-                          fullWidth
-                          sx={{ mt: 2, p: '12px 12px' }}
-                          onClick={() => handleContact(photographer)}
-                        >
-                          Contact
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          color="primary"
-                          fullWidth
-                          sx={{ mt: 1, p: '12px 12px' }}
-                          onClick={() => handleViewDetails(photographer)}
-                        >
-                          View Details
-                        </Button>
-                      </CardContent>
-                    </Card>
+                  {/* Displaying search results or message */}
+                  <Grid container spacing={2}>
+                    {searchResults.length > 0
+                      ? searchResults.map((photographer, index) => (
+                          <Grid item xs={12} sm={6} md={4} key={index}>
+                            <Card sx={{ boxShadow: 3 }}>
+                              <CardContent>
+                                <Avatar
+                                  src={photographer.profilePicture}
+                                  alt={photographer.username}
+                                  sx={{
+                                    width: 80,
+                                    height: 80,
+                                    margin: "0 auto",
+                                  }}
+                                />
+                                <Typography
+                                  variant="h6"
+                                  component="div"
+                                  sx={{ textAlign: "center", mt: 1 }}
+                                >
+                                  {photographer.username}
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  color="textSecondary"
+                                  sx={{ textAlign: "center", mt: 1 }}
+                                >
+                                  {photographer.shortDescription}
+                                </Typography>
+                                <Typography
+                                  color="text.secondary"
+                                  sx={{
+                                    textAlign: "center",
+                                    color: photographer.isAvailable
+                                      ? "green"
+                                      : "red",
+                                  }}
+                                >
+                                  {photographer.isAvailable
+                                    ? "Available"
+                                    : "Not Available"}
+                                </Typography>
+                                <Button
+                                  variant="contained"
+                                  color="primary"
+                                  fullWidth
+                                  sx={{ mt: 2, p: "12px 12px" }}
+                                  onClick={() => handleContact(photographer)}
+                                >
+                                  Contact
+                                </Button>
+                                <Button
+                                  variant="outlined"
+                                  color="primary"
+                                  fullWidth
+                                  sx={{ mt: 1, p: "12px 12px" }}
+                                  onClick={() =>
+                                    handleViewDetails(photographer)
+                                  }
+                                >
+                                  View Details
+                                </Button>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                        ))
+                      : searchQuery && (
+                          <Grid item xs={12}>
+                            <Typography
+                              variant="h6"
+                              sx={{ textAlign: "center", mt: 2, color: "red" }}
+                            >
+                              No matching results found.
+                            </Typography>
+                          </Grid>
+                        )}
                   </Grid>
-                ))
-              ) : (
-                searchQuery && (
-                  <Grid item xs={12}>
-                    <Typography
-                      variant="h6"
-                      sx={{ textAlign: 'center', mt: 2, color: 'red' }}
-                    >
-                      No matching results found.
-                    </Typography>
-                  </Grid>
-                )
-              )}
-            </Grid>
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
             )}
 
             {viewMode === "contactDetails" && selectedContact && (
@@ -1259,8 +1279,10 @@ function ClientDashboard() {
           </Grid>
         </Grid>
       </Container>
+
       <Footer />
 
+      {/* Photographer Viewer Dialog */}
       <Dialog
         open={openDialog}
         onClose={handleCloseDialog}
