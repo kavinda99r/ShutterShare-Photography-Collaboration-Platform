@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { getDoc, doc, updateDoc, arrayUnion, arrayRemove, getDocs, collection, query, orderBy, deleteDoc, setDoc,addDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject,getStorage, listAll } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, Switch, FormControlLabel, List, ListItem, ListItemButton, ListItemAvatar,ListItemText, Badge, Popover, CircularProgress } from '@mui/material';
+import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, Switch, FormControlLabel, List, ListItem, ListItemButton, ListItemAvatar,ListItemText, Badge, Popover, CircularProgress, Divider, Drawer } from '@mui/material';
 import Swal from 'sweetalert2';
 import { Delete as DeleteIcon } from '@mui/icons-material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -43,6 +43,8 @@ function PhotographerDashboard() {
   const [removeButtonText, setRemoveButtonText] = useState("Remove All Images");
   const [sending, setSending] = useState(false);
   const [sendButtonText, setSendButtonText] = useState("Send Images");
+
+  
 
   useEffect(() => {
     const fetchData = async () => {
@@ -759,7 +761,7 @@ function PhotographerDashboard() {
 
   return (
     <>
-      <div className="nav-section">
+      <div className="nav-section" style={{borderBottom: "1px solid #DADBDD"}}>
         <nav className="navbar-dash">
           <div className="logo-head">
             <img src={logo} alt="" className="logo" />
@@ -774,81 +776,110 @@ function PhotographerDashboard() {
               alignItems: "center",
               listStyleType: "none",
               padding: 0,
+              margin: 0,
             }}
           >
             <li>
-              <Box sx={{ display: "flex", justifyContent: "flex-end", p: 2 }}>
-                <IconButton color="primary" onClick={handleClick}>
-                  <Badge badgeContent={notifications.length} color="error">
-                    <NotificationsIcon />
-                  </Badge>
-                </IconButton>
-                <Popover
-                  open={open}
-                  anchorEl={anchorEl}
-                  onClose={handleClose}
-                  anchorOrigin={{
-                    vertical: "bottom",
-                    horizontal: "right",
-                  }}
-                  transformOrigin={{
-                    vertical: "top",
-                    horizontal: "right",
-                  }}
-                >
-                  <Box
-                    sx={{ p: 2, width: 500, maxHeight: 200, overflowY: "auto" }}
-                  >
-                    {notifications.length > 0 ? (
-                      <List>
-                        {notifications.map((notification) => (
-                          <ListItem
-                            key={notification.id}
-                            secondaryAction={
-                              <>
-                                <Button
-                                  variant="contained"
-                                  color="primary"
-                                  onClick={() =>
-                                    handleAcceptBooking(
-                                      notification.id,
-                                      notification.bookingId
-                                    )
-                                  }
-                                  sx={{ mr: 1 }}
-                                >
-                                  Accept
-                                </Button>
-                                <IconButton
-                                  edge="end"
-                                  aria-label="delete"
-                                  color="error"
-                                  onClick={() =>
-                                    handleRemoveNotification(notification.id)
-                                  }
-                                >
-                                  <DeleteIcon />
-                                </IconButton>
-                              </>
-                            }
-                          >
-                            <ListItemText
-                              primary={notification.message}
-                              secondary={
-                                notification.timestamp
-                                  ? notification.timestamp.toLocaleString()
-                                  : "No timestamp available"
-                              }
-                            />
-                          </ListItem>
-                        ))}
-                      </List>
-                    ) : (
-                      <Typography>No notifications</Typography>
-                    )}
-                  </Box>
-                </Popover>
-              </Box>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", p: 0 }}>
+  <IconButton color="primary" onClick={handleClick}>
+    <Badge badgeContent={notifications.length} color="error">
+      <NotificationsIcon />
+    </Badge>
+  </IconButton>
+  <Popover
+    open={open}
+    anchorEl={anchorEl}
+    onClose={handleClose}
+    anchorOrigin={{
+      vertical: "bottom",
+      horizontal: "right",
+    }}
+    transformOrigin={{
+      vertical: "top",
+      horizontal: "right",
+    }}
+    sx={{
+      boxShadow: "none",
+      "& .MuiPopover-paper": {
+        boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.09)", // Ensures popover paper has no shadow
+        border: "1px solid #e0e0e0", // Add a light border
+        borderRadius: "4px", // Optional: add rounded corners
+      },
+    }}
+  >
+    <Box sx={{ p: 2, width: 500, maxHeight: 300, overflowY: "auto" }}>
+      {/* Notification Title with Icon */}
+      <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+        <NotificationsIcon sx={{ mr: 1, color: "#62646F" }} />
+        <Typography variant="h6" sx={{ color: "#62646F" }}>
+          Notifications
+        </Typography>
+      </Box>
+      
+      {/* Divider after the title */}
+      <Divider sx={{ mb: 2 }} />
+
+      {/* Notification list */}
+      {notifications.length > 0 ? (
+        <List>
+          {notifications.map((notification) => (
+            <React.Fragment key={notification.id}>
+              <ListItem
+                secondaryAction={
+                  <>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={() =>
+                        handleAcceptBooking(
+                          notification.id,
+                          notification.bookingId
+                        )
+                      }
+                      sx={{ mr: 1, boxShadow: "none" }}
+                    >
+                      Accept
+                    </Button>
+                    <IconButton
+                      edge="end"
+                      aria-label="delete"
+                      color="error"
+                      onClick={() =>
+                        handleRemoveNotification(notification.id)
+                      }
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </>
+                }
+              >
+                <ListItemText
+                  primary={
+                    <Typography sx={{ color: "#62646F" }}>
+                      {notification.message}
+                    </Typography>
+                  }
+                  secondary={
+                    <Typography sx={{ color: "#62646F", fontSize: "0.875rem" }}>
+                      {notification.timestamp
+                        ? notification.timestamp.toLocaleString()
+                        : "No timestamp available"}
+                    </Typography>
+                  }
+                />
+              </ListItem>
+              <Divider sx={{ my: 1 }} />
+            </React.Fragment>
+          ))}
+        </List>
+      ) : (
+        <Typography sx={{ color: "#62646F" }}>No notifications</Typography>
+      )}
+    </Box>
+  </Popover>
+</Box>
+
+
             </li>
             <li>
               <LinkRouter to="/login" style={{ textDecoration: "none" }}>
@@ -878,29 +909,40 @@ function PhotographerDashboard() {
         </nav>
       </div>
 
-      <Container component="main" maxWidth="xl">
-        <Grid container spacing={4} sx={{ mt: 4 }}>
+      <Container component="main" maxWidth="xl" sx={{backgroundColor: "#F5F5F5", p:1,}}>
+        <Grid container justifyContent="center" spacing={4} sx={{ mt: 0}}>
           <Grid item xs={12} md={3} sx={{ flexBasis: "25%" }}>
-            <Card sx={{ p: 2, boxShadow: 3, mb: 4 }}>
+            <Card sx={{ p: 2, boxShadow: "none", mb: 4, border: "1px solid #DADBDD" }}>
               <CardContent>
                 <Typography
                   component="h2"
-                  variant="h6"
+                  variant="h5"
                   sx={{ fontWeight: "bold", mb: 2 }}
                 >
                   Profile Details
                 </Typography>
                 <Box component="form" onSubmit={handleUpdate} noValidate>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ color: "#62646F", fontWeight: "bold", mb: -1 }}
+                  >
+                    Username
+                  </Typography>
+
                   <TextField
                     margin="normal"
                     required
                     fullWidth
                     id="username"
-                    label="Username"
                     name="username"
                     autoComplete="username"
                     inputRef={usernameRef}
                     InputLabelProps={{ shrink: true }}
+                    sx={{
+                      "& .MuiInputBase-root": {
+                        color: "#62646F", // Change input text color
+                      },
+                    }} // Removed this because no label is used now
                   />
                   <FormControlLabel
                     control={
@@ -909,7 +951,13 @@ function PhotographerDashboard() {
                         onChange={handleAvailabilityChange}
                       />
                     }
-                    label="Available"
+                    label="Availability Status"
+                    sx={{
+                      "& .MuiFormControlLabel-label": {
+                        color: "#62646F", // Change the font color
+                        fontWeight: "400", // Change the font weight
+                      },
+                    }}
                   />
                   <Button
                     type="submit"
@@ -917,7 +965,14 @@ function PhotographerDashboard() {
                     variant="contained"
                     color="primary"
                     disabled={loading} // Disable button during loading
-                    sx={{ mt: 2, mb: 2, p: "12px 12px", position: "relative" }}
+                    sx={{
+                      mt: 2,
+                      mb: 3,
+                      p: "8px 8px",
+                      position: "relative",
+                      boxShadow: "none",
+                      textTransform: "none",
+                    }}
                   >
                     {loading ? (
                       <Box sx={{ display: "flex", alignItems: "center" }}>
@@ -932,6 +987,7 @@ function PhotographerDashboard() {
                     )}
                   </Button>
                 </Box>
+                <Divider sx={{ my: 2 }} />
                 <Box sx={{ mt: 4, textAlign: "center" }}>
                   <Avatar
                     src={profilePicture}
@@ -951,7 +1007,7 @@ function PhotographerDashboard() {
                       color="primary"
                       fullWidth
                       component="span"
-                      sx={{ mt: 2, p: "12px 12px" }}
+                      sx={{ mt: 2, p: "8px 8px", textTransform: "none" }}
                     >
                       Choose Profile Picture
                     </Button>
@@ -962,7 +1018,13 @@ function PhotographerDashboard() {
                     fullWidth
                     onClick={handleUpload}
                     disabled={loading || files.length === 0} // Disable if loading or no files
-                    sx={{ mt: 2, p: "12px 12px", position: "relative" }}
+                    sx={{
+                      mt: 2,
+                      mb: 3,
+                      p: "8px 8px",
+                      position: "relative",
+                      textTransform: "none",
+                    }}
                   >
                     {loading ? (
                       <Box sx={{ display: "flex", alignItems: "center" }}>
@@ -977,6 +1039,7 @@ function PhotographerDashboard() {
                     )}
                   </Button>
                 </Box>
+                <Divider sx={{ mb: 1, mt: 2 }} />
                 <Box sx={{ mt: 4 }}>
                   <Typography
                     component="h2"
@@ -1018,8 +1081,8 @@ function PhotographerDashboard() {
             </Card>
           </Grid>
 
-          <Grid item xs={12} md={9} sx={{ flexBasis: "75%" }}>
-            <Card sx={{ p: 2, boxShadow: 3, mb: 4 }}>
+          <Grid item xs={12} md={8} sx={{ flexBasis: "75%" }}>
+            <Card sx={{ p: 2, boxShadow: "none", mb: 4, border: "1px solid #DADBDD" }}>
               <CardContent sx={{ position: "relative" }}>
                 {viewMode === "contactDetails" && selectedContact ? (
                   <>
@@ -1279,52 +1342,91 @@ function PhotographerDashboard() {
                   </>
                 ) : (
                   <>
-                    <Typography
-                      component="h2"
-                      variant="h6"
-                      sx={{ fontWeight: "bold", mb: 2 }}
-                    >
-                      Edit Descriptions
-                    </Typography>
-                    <Box
-                      component="form"
-                      onSubmit={handleUpdatedescription}
-                      noValidate
-                    >
-                      <TextField
-                        margin="normal"
-                        required
-                        fullWidth
-                        id="shortDescription"
-                        label="Short Description"
-                        name="shortDescription"
-                        autoComplete="short-description"
-                        inputRef={shortDescriptionRef}
-                        InputLabelProps={{ shrink: true }}
-                      />
-                      <TextField
-                        margin="normal"
-                        required
-                        fullWidth
-                        id="detailedDescription"
-                        label="Detailed Description"
-                        name="detailedDescription"
-                        autoComplete="detailed-description"
-                        multiline
-                        rows={14}
-                        inputRef={detailedDescriptionRef}
-                        InputLabelProps={{ shrink: true }}
-                      />
-                      <TextField
-                        margin="normal"
-                        fullWidth
-                        id="price"
-                        label="Price Details"
-                        name="price"
-                        autoComplete="price"
-                        inputRef={priceRef}
-                        InputLabelProps={{ shrink: true }}
-                      />
+                    <Box>
+                      {/* Short Description */}
+                      <Box mb={2}>
+                        <Typography
+                          component="h2"
+                          variant="h5"
+                          sx={{ fontWeight: "bold", mb: 2 }}
+                        >
+                          Description
+                        </Typography>
+                        <Typography
+                          variant="subtitle1"
+                          sx={{ color: "#62646F", fontWeight: "bold", mb: -1 }}
+                        >
+                          Short Description
+                        </Typography>
+                        <TextField
+                          margin="normal"
+                          required
+                          fullWidth
+                          id="shortDescription"
+                          name="shortDescription"
+                          autoComplete="short-description"
+                          inputRef={shortDescriptionRef}
+                          InputLabelProps={{ shrink: true }}
+                          sx={{
+                            "& .MuiInputBase-root": {
+                              color: "#62646F", // Change input text color
+                            },
+                          }}
+                        />
+                      </Box>
+
+                      {/* Detailed Description */}
+                      <Box mb={2}>
+                        <Typography
+                          variant="subtitle1"
+                          sx={{ color: "#62646F", fontWeight: "bold", mb: -1 }}
+                        >
+                          Detailed Description
+                        </Typography>
+                        <TextField
+                          margin="normal"
+                          required
+                          fullWidth
+                          id="detailedDescription"
+                          name="detailedDescription"
+                          autoComplete="detailed-description"
+                          multiline
+                          rows={14}
+                          inputRef={detailedDescriptionRef}
+                          InputLabelProps={{ shrink: true }}
+                          sx={{
+                            "& .MuiInputBase-root": {
+                              color: "#62646F", // Change input text color
+                            },
+                          }}
+                        />
+                      </Box>
+
+                      {/* Price Details */}
+                      <Box mb={2}>
+                        <Typography
+                          variant="subtitle1"
+                          sx={{ color: "#62646F", fontWeight: "bold", mb: -1 }}
+                        >
+                          Price Details
+                        </Typography>
+                        <TextField
+                          margin="normal"
+                          fullWidth
+                          id="price"
+                          name="price"
+                          autoComplete="price"
+                          inputRef={priceRef}
+                          InputLabelProps={{ shrink: true }}
+                          sx={{
+                            "& .MuiInputBase-root": {
+                              color: "#62646F", // Change input text color
+                            },
+                            mb: -1,
+                          }}
+                        />
+                      </Box>
+
                       <Button
                         type="submit"
                         variant="contained"
@@ -1336,7 +1438,9 @@ function PhotographerDashboard() {
                           mb: 2,
                           p: "12px 12px",
                           position: "relative",
-                          width: "300px",
+                          width: "250px",
+                          boxShadow: "none",
+                          textTransform: "none",
                         }} // Preserve button padding and size
                       >
                         {loading ? (
@@ -1345,106 +1449,97 @@ function PhotographerDashboard() {
                               size={24}
                               sx={{ color: "inherit", mr: 1 }}
                             />
-                            Updating
+                            Saving
                           </Box>
                         ) : (
-                          "Update Descriptions"
+                          "Save Changes"
                         )}
                       </Button>
                     </Box>
-
+                    
+                    <Divider sx={{ my: 2 }} />
                     {/* Portfolio Showcase Section */}
-                    <Card sx={{ p: 2, boxShadow: 3, mt: 4 }}>
-                      <CardContent>
-                        <Typography
-                          component="h2"
-                          variant="h6"
-                          sx={{ fontWeight: "bold", mb: 2 }}
-                        >
-                          Portfolio Showcase
-                        </Typography>
-                        <Box sx={{ mb: 2 }}>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleFileChange}
-                            style={{ display: "none" }}
-                            id="upload-images"
-                            multiple
-                          />
-                          <label htmlFor="upload-images">
-                            <Button
-                              variant="outlined"
-                              color="primary"
-                              component="span"
-                              sx={{ mt: 2, mr: 1, p: "12px 12px" }}
-                            >
-                              Add Images
-                            </Button>
-                          </label>
-                          <Button
-                            variant="contained"
-                            color="primary"
-                            onClick={handleImageUpload}
-                            disabled={loading || files.length === 0}
-                            sx={{ mt: 2, p: "12px 12px" }}
-                          >
-                            Upload Images
-                          </Button>
-                        </Box>
-                        <Grid
-                          container
-                          spacing={2}
-                          sx={{ overflowY: "auto", maxHeight: "400px" }}
-                        >
-                          {portfolioImages.length > 0 &&
-                            portfolioImages.slice(1).map((imgURL, index) => (
-                              <Grid item xs={6} sm={3} key={index}>
-                                <Box
-                                  sx={{
-                                    position: "relative",
-                                    paddingTop: "100%",
-                                    overflow: "hidden",
-                                    backgroundColor: "#f0f0f0",
-                                  }}
-                                >
-                                  <img
-                                    src={imgURL}
-                                    alt={`Portfolio ${index}`}
-                                    style={{
-                                      position: "absolute",
-                                      top: "50%",
-                                      left: "50%",
-                                      width: "100%",
-                                      height: "100%",
-                                      transform: "translate(-50%, -50%)",
-                                      objectFit: "cover",
-                                      cursor: "pointer",
-                                    }}
-                                    onClick={() => handleOpenDialog(imgURL)}
-                                  />
-                                  <IconButton
-                                    onClick={() => handleRemoveImage(imgURL)}
-                                    sx={{
-                                      position: "absolute",
-                                      top: 8,
-                                      right: 8,
-                                      backgroundColor:
-                                        "rgba(255, 255, 255, 0.7)",
-                                      "&:hover": {
-                                        backgroundColor:
-                                          "rgba(255, 255, 255, 1)",
-                                      },
-                                    }}
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
-                                </Box>
-                              </Grid>
-                            ))}
-                        </Grid>
-                      </CardContent>
-                    </Card>
+                    <Box sx={{ backgroundColor: "white", borderRadius: 2 }}>
+  <Typography component="h2" variant="h5" sx={{ fontWeight: "bold", mb: 1, mt: 3 }}>
+    Portfolio Showcase
+  </Typography>
+  <Box sx={{ mb: 2 }}>
+    <input
+      type="file"
+      accept="image/*"
+      onChange={handleFileChange}
+      style={{ display: "none" }}
+      id="upload-images"
+      multiple
+    />
+    <label htmlFor="upload-images">
+      <Button
+        variant="outlined"
+        color="primary"
+        component="span"
+        sx={{ mt: 2, mr: 1, p: "8px 14px", textTransform: "none"}}
+      >
+        Add Images
+      </Button>
+    </label>
+    <Button
+      variant="contained"
+      color="primary"
+      onClick={handleImageUpload}
+      disabled={loading || files.length === 0}
+      sx={{ mt: 2, p: "8px 14px", boxShadow: "none", textTransform: "none" }}
+    >
+      Upload Images
+    </Button>
+  </Box>
+  <Grid container spacing={2} sx={{ overflowY: "auto", maxHeight: "400px", mt: 2, }}>
+    {portfolioImages.length > 0 &&
+      portfolioImages.slice(1).map((imgURL, index) => (
+        <Grid item xs={6} sm={3} key={index}>
+          <Box
+            sx={{
+              position: "relative",
+              paddingTop: "100%",
+              overflow: "hidden",
+              backgroundColor: "#f0f0f0",
+            }}
+          >
+            <img
+              src={imgURL}
+              alt={`Portfolio ${index}`}
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                width: "100%",
+                height: "100%",
+                transform: "translate(-50%, -50%)",
+                objectFit: "cover",
+                cursor: "pointer",
+                borderRadius: "5px"
+              }}
+              onClick={() => handleOpenDialog(imgURL)}
+            />
+            <IconButton
+              onClick={() => handleRemoveImage(imgURL)}
+              sx={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                backgroundColor: "rgba(255, 255, 255, 0.7)",
+                "&:hover": {
+                  backgroundColor: "rgba(255, 255, 255, 1)",
+                },
+              }}
+            >
+              <DeleteIcon />
+            </IconButton>
+          </Box>
+        </Grid>
+      ))}
+  </Grid>
+</Box>
+
                   </>
                 )}
               </CardContent>

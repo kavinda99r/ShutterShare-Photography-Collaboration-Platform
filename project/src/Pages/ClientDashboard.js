@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { getDoc, doc, collection, query, where, getDocs, updateDoc, setDoc, addDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
-import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, Dialog, DialogTitle, DialogContent, DialogActions, Popover, Badge, Checkbox, CircularProgress } from '@mui/material';
+import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, Dialog, DialogTitle, DialogContent, DialogActions, Popover, Badge, Checkbox, CircularProgress, Divider } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import Swal from 'sweetalert2';
@@ -795,73 +795,76 @@ function ClientDashboard() {
             }}
           >
             <li>
-              <Box sx={{ display: "flex", justifyContent: "flex-end", p: 2 }}>
-                <IconButton color="primary" onClick={handleClick}>
-                  <Badge
-                    badgeContent={
-                      notifications.filter(
-                        (notification) => !notification.viewed
-                      ).length
-                    }
-                    color="error"
-                  >
-                    <NotificationsIcon />
-                  </Badge>
-                </IconButton>
-              </Box>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", p: 2 }}>
+  <IconButton color="primary" onClick={handleClick}>
+    <NotificationsIcon />
+  </IconButton>
+</Box>
 
-              <Popover
-                open={open}
-                anchorEl={anchorEl}
-                onClose={handleClose}
-                anchorOrigin={{
-                  vertical: "bottom",
-                  horizontal: "right",
-                }}
-                transformOrigin={{
-                  vertical: "top",
-                  horizontal: "right",
-                }}
+<Popover
+  open={open}
+  anchorEl={anchorEl}
+  onClose={handleClose}
+  anchorOrigin={{
+    vertical: "bottom",
+    horizontal: "right",
+  }}
+  transformOrigin={{
+    vertical: "top",
+    horizontal: "right",
+  }}
+  sx={{
+    boxShadow: "none",
+    "& .MuiPopover-paper": {
+      boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.09)", // Ensures popover paper has no shadow
+      border: "1px solid #e0e0e0", // Light border
+      borderRadius: "4px", // Rounded corners
+    },
+  }}
+>
+  <Box sx={{ p: 2, width: 500, maxHeight: 300, overflowY: "auto" }}>
+    {/* Notifications Title with Icon */}
+    <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+      <NotificationsIcon sx={{ mr: 1, color: "#62646F" }} />
+      <Typography variant="h6" sx={{ color: "#62646F" }}>
+        Notifications
+      </Typography>
+    </Box>
+
+    {/* Divider after the title */}
+    <Divider sx={{ mb: 2 }} />
+
+    {/* Notification List */}
+    {notifications.length === 0 ? (
+      <Typography sx={{ color: "#62646F" }}>No notifications</Typography>
+    ) : (
+      <List>
+        {notifications.map((notification) => (
+          <React.Fragment key={notification.id}>
+            <ListItem sx={{ display: "flex", alignItems: "center" }}>
+              <ListItemText
+                primary={notification.message}
+                secondary={
+                  notification.timestamp
+                    ? new Date(notification.timestamp.seconds * 1000).toLocaleString()
+                    : ""
+                }
+              />
+              <IconButton
+                color="error"
+                onClick={() => handleDelete(notification.id)}
               >
-                <Box
-                  sx={{
-                    p: 2,
-                    width: "500px",
-                    maxHeight: 200,
-                    overflowY: "auto",
-                  }}
-                >
-                  <List>
-                    {notifications.length === 0 ? (
-                      <Typography>No notifications</Typography>
-                    ) : (
-                      notifications.map((notification) => (
-                        <ListItem
-                          key={notification.id}
-                          sx={{ display: "flex", alignItems: "center" }}
-                        >
-                          <ListItemText
-                            primary={`${notification.message}`}
-                            secondary={
-                              notification.timestamp
-                                ? new Date(
-                                    notification.timestamp.seconds * 1000
-                                  ).toLocaleString()
-                                : ""
-                            }
-                          />
-                          <IconButton
-                            color="error"
-                            onClick={() => handleDelete(notification.id)}
-                          >
-                            <DeleteIcon /> {/* Remove icon */}
-                          </IconButton>
-                        </ListItem>
-                      ))
-                    )}
-                  </List>
-                </Box>
-              </Popover>
+                <DeleteIcon />
+              </IconButton>
+            </ListItem>
+            <Divider sx={{ my: 1 }} />
+          </React.Fragment>
+        ))}
+      </List>
+    )}
+  </Box>
+</Popover>
+
             </li>
             <li>
               <LinkRouter to="/login" style={{ textDecoration: "none" }}>
