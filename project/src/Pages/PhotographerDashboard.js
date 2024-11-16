@@ -1,7 +1,7 @@
 // src/components/PhotographerDashboard.js
 import React, { useRef, useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getDoc, doc, updateDoc, arrayUnion, arrayRemove, getDocs, collection, query, orderBy, deleteDoc, setDoc,addDoc, where, onSnapshot } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, arrayUnion, arrayRemove, getDocs, collection, query, orderBy, deleteDoc, setDoc,addDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject,getStorage, listAll } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, Dialog, DialogActions, DialogContent, DialogTitle, Switch, FormControlLabel, List, ListItem, ListItemButton, ListItemAvatar,ListItemText, Badge, Popover, CircularProgress, Divider, Drawer } from '@mui/material';
@@ -43,36 +43,8 @@ function PhotographerDashboard() {
   const [removeButtonText, setRemoveButtonText] = useState("Remove All Images");
   const [sending, setSending] = useState(false);
   const [sendButtonText, setSendButtonText] = useState("Send Images");
-  const [clients, setClients] = useState([]);
-  const [error, setError] = useState(null);
 
-  // Fetch client data from Firestore
-  useEffect(() => {
-    const fetchClients = async () => {
-      setLoading(true);
-      try {
-        const q = query(collection(db, "users"), where("role", "==", "client"));
-        const querySnapshot = await getDocs(q);
-
-        const clientData = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          username: doc.data().username,
-          email: doc.data().email,
-          role: doc.data().role,
-          status: doc.data().status,
-          profilePicture: doc.data().profilePicture || null, // Add profile picture field
-        }));
-
-        setClients(clientData);
-      } catch (err) {
-        console.error("Error fetching client data:", err);
-        setError("Failed to fetch client data. Please try again later.");
-      }
-      setLoading(false);
-    };
-
-    fetchClients();
-  }, []);
+  
 
   useEffect(() => {
     const fetchData = async () => {
@@ -268,25 +240,25 @@ function PhotographerDashboard() {
   const handleUpdatedescription = async (e) => {
     e.preventDefault();
     setLoading(true);
-
-    // Validate that no field is empty
+  
     const shortDescription = shortDescriptionRef.current.value.trim();
     const detailedDescription = detailedDescriptionRef.current.value.trim();
     const price = priceRef.current.value.trim();
-
+  
+    // Ensure all fields are filled
     if (!shortDescription || !detailedDescription || !price) {
-      Swal.fire("Error", "Please fill in all the required fields.", "error");
-      setLoading(false);
-      return; // Exit the function if validation fails
+      setLoading(false); // Stop loading if validation fails
+      Swal.fire("Error", "All fields must be filled!", "error");
+      return;
     }
-
+  
     try {
       await updateDoc(doc(db, "users", currentUser.uid), {
         shortDescription,
         detailedDescription,
         price, // Update price details
       });
-
+  
       Swal.fire("Success", "Profile updated!", "success");
     } catch (error) {
       Swal.fire("Error", `Failed to update profile: ${error.message}`, "error");
@@ -439,7 +411,7 @@ function PhotographerDashboard() {
       // Success message
       Swal.fire(
         "Success",
-        "Booking accepted! Client added to your Contacts.",
+        "Booking accepted! Client added to your messages.",
         "success"
       );
     } catch (error) {
@@ -830,9 +802,7 @@ function PhotographerDashboard() {
 
   return (
     <>
-      <div className="nav-section" 
-      style={{ borderBottom: "1px solid #DADBDD" }}
-      >
+      <div className="nav-section" style={{borderBottom: "1px solid #DADBDD"}}>
         <nav className="navbar-dash">
           <div className="logo-head">
             <img src={logo} alt="" className="logo" />
@@ -851,113 +821,106 @@ function PhotographerDashboard() {
             }}
           >
             <li>
-              <Box sx={{ display: "flex", justifyContent: "flex-end", p: 0 }}>
-                <IconButton color="primary" onClick={handleClick}>
-                  <Badge badgeContent={notifications.length} color="error">
-                    <NotificationsIcon />
-                  </Badge>
-                </IconButton>
-                <Popover
-                  open={open}
-                  anchorEl={anchorEl}
-                  onClose={handleClose}
-                  anchorOrigin={{
-                    vertical: "bottom",
-                    horizontal: "right",
-                  }}
-                  transformOrigin={{
-                    vertical: "top",
-                    horizontal: "right",
-                  }}
-                  sx={{
-                    boxShadow: "none",
-                    "& .MuiPopover-paper": {
-                      boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.09)", // Ensures popover paper has no shadow
-                      border: "1px solid #e0e0e0", // Add a light border
-                      borderRadius: "4px", // Optional: add rounded corners
-                    },
-                  }}
-                >
-                  <Box
-                    sx={{ p: 2, width: 500, maxHeight: 300, overflowY: "auto" }}
-                  >
-                    {/* Notification Title with Icon */}
-                    <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                      <NotificationsIcon sx={{ mr: 1, color: "#62646F" }} />
-                      <Typography variant="h6" sx={{ color: "#62646F" }}>
-                        Notifications
-                      </Typography>
-                    </Box>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", p: 0 }}>
+  <IconButton color="primary" onClick={handleClick}>
+    <Badge badgeContent={notifications.length} color="error">
+      <NotificationsIcon />
+    </Badge>
+  </IconButton>
+  <Popover
+    open={open}
+    anchorEl={anchorEl}
+    onClose={handleClose}
+    anchorOrigin={{
+      vertical: "bottom",
+      horizontal: "right",
+    }}
+    transformOrigin={{
+      vertical: "top",
+      horizontal: "right",
+    }}
+    sx={{
+      boxShadow: "none",
+      "& .MuiPopover-paper": {
+        boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.09)", // Ensures popover paper has no shadow
+        border: "1px solid #e0e0e0", // Add a light border
+        borderRadius: "4px", // Optional: add rounded corners
+      },
+    }}
+  >
+    <Box sx={{ p: 2, width: 500, maxHeight: 300, overflowY: "auto" }}>
+      {/* Notification Title with Icon */}
+      <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+        <NotificationsIcon sx={{ mr: 1, color: "#62646F" }} />
+        <Typography variant="h6" sx={{ color: "#62646F" }}>
+          Notifications
+        </Typography>
+      </Box>
+      
+      {/* Divider after the title */}
+      <Divider sx={{ mb: 2 }} />
 
-                    {/* Divider after the title */}
-                    <Divider sx={{ mb: 2 }} />
+      {/* Notification list */}
+      {notifications.length > 0 ? (
+        <List>
+          {notifications.map((notification) => (
+            <React.Fragment key={notification.id}>
+              <ListItem
+                secondaryAction={
+                  <>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={() =>
+                        handleAcceptBooking(
+                          notification.id,
+                          notification.bookingId
+                        )
+                      }
+                      sx={{ mr: 1, boxShadow: "none" }}
+                    >
+                      Accept
+                    </Button>
+                    <IconButton
+                      edge="end"
+                      aria-label="delete"
+                      color="error"
+                      onClick={() =>
+                        handleRemoveNotification(notification.id)
+                      }
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </>
+                }
+              >
+                <ListItemText
+                  primary={
+                    <Typography sx={{ color: "#62646F" }}>
+                      {notification.message}
+                    </Typography>
+                  }
+                  secondary={
+                    <Typography sx={{ color: "#62646F", fontSize: "0.875rem" }}>
+                      {notification.timestamp
+                        ? notification.timestamp.toLocaleString()
+                        : "No timestamp available"}
+                    </Typography>
+                  }
+                />
+              </ListItem>
+              <Divider sx={{ my: 1 }} />
+            </React.Fragment>
+          ))}
+        </List>
+      ) : (
+        <Typography sx={{ color: "#62646F" }}>No notifications</Typography>
+      )}
+    </Box>
+  </Popover>
+</Box>
 
-                    {/* Notification list */}
-                    {notifications.length > 0 ? (
-                      <List>
-                        {notifications.map((notification) => (
-                          <React.Fragment key={notification.id}>
-                            <ListItem
-                              secondaryAction={
-                                <>
-                                  <Button
-                                    variant="contained"
-                                    color="primary"
-                                    onClick={() =>
-                                      handleAcceptBooking(
-                                        notification.id,
-                                        notification.bookingId
-                                      )
-                                    }
-                                    sx={{ mr: 1, boxShadow: "none" }}
-                                  >
-                                    Accept
-                                  </Button>
-                                  <IconButton
-                                    edge="end"
-                                    aria-label="delete"
-                                    color="error"
-                                    onClick={() =>
-                                      handleRemoveNotification(notification.id)
-                                    }
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
-                                </>
-                              }
-                            >
-                              <ListItemText
-                                primary={
-                                  <Typography sx={{ color: "#62646F" }}>
-                                    {notification.message}
-                                  </Typography>
-                                }
-                                secondary={
-                                  <Typography
-                                    sx={{
-                                      color: "#62646F",
-                                      fontSize: "0.875rem",
-                                    }}
-                                  >
-                                    {notification.timestamp
-                                      ? notification.timestamp.toLocaleString()
-                                      : "No timestamp available"}
-                                  </Typography>
-                                }
-                              />
-                            </ListItem>
-                            <Divider sx={{ my: 1 }} />
-                          </React.Fragment>
-                        ))}
-                      </List>
-                    ) : (
-                      <Typography sx={{ color: "#62646F" }}>
-                        No notifications
-                      </Typography>
-                    )}
-                  </Box>
-                </Popover>
-              </Box>
+
             </li>
             <li>
               <LinkRouter to="/login" style={{ textDecoration: "none" }}>
@@ -987,22 +950,10 @@ function PhotographerDashboard() {
         </nav>
       </div>
 
-      <Container
-        component="main"
-        maxWidth="xl"
-        sx={{ backgroundColor: "#F5F5F5", p: 1 }}
-      >
-        <Grid container justifyContent="center" spacing={4} sx={{ mt: 0 }}>
+      <Container component="main" maxWidth="xl" sx={{backgroundColor: "#F5F5F5", p:1,}}>
+        <Grid container justifyContent="center" spacing={4} sx={{ mt: 0}}>
           <Grid item xs={12} md={3} sx={{ flexBasis: "25%" }}>
-            {/* Profile Details Card */}
-            <Card
-              sx={{
-                p: 2,
-                boxShadow: "none",
-                mb: 4,
-                border: "1px solid #DADBDD",
-              }}
-            >
+            <Card sx={{ p: 2, boxShadow: "none", mb: 4, border: "1px solid #DADBDD" }}>
               <CardContent>
                 <Typography
                   component="h2"
@@ -1032,7 +983,7 @@ function PhotographerDashboard() {
                       "& .MuiInputBase-root": {
                         color: "#62646F", // Change input text color
                       },
-                    }}
+                    }} // Removed this because no label is used now
                   />
                   <FormControlLabel
                     control={
@@ -1058,7 +1009,7 @@ function PhotographerDashboard() {
                     sx={{
                       mt: 2,
                       mb: 3,
-                      p: "12px 12px",
+                      p: "12px 8px",
                       position: "relative",
                       boxShadow: "none",
                       textTransform: "none",
@@ -1097,7 +1048,7 @@ function PhotographerDashboard() {
                       color="primary"
                       fullWidth
                       component="span"
-                      sx={{ mt: 2, p: "8px 8px", textTransform: "none" }}
+                      sx={{ mt: 2, p: "8px 16px", textTransform: "none" }}
                     >
                       Choose Profile Picture
                     </Button>
@@ -1111,7 +1062,7 @@ function PhotographerDashboard() {
                     sx={{
                       mt: 2,
                       mb: 3,
-                      p: "8px 8px",
+                      p: "8px 16px",
                       position: "relative",
                       textTransform: "none",
                     }}
@@ -1129,34 +1080,19 @@ function PhotographerDashboard() {
                     )}
                   </Button>
                 </Box>
-              </CardContent>
-            </Card>
-
-            {/* Contacts Card */}
-            <Card
-              sx={{
-                p: 2,
-                boxShadow: "none",
-                mb: 4,
-                border: "1px solid #DADBDD",
-              }}
-            >
-              <CardContent>
-                <Typography
-                  component="h2"
-                  variant="h5"
-                  sx={{ fontWeight: "bold", mb: 2 }}
-                >
-                  Contacts
-                </Typography>
-
-                <Divider />
-
-                <List>
-                  {contactedClients.map((client, index) => (
-                    <React.Fragment key={index}>
+                <Divider sx={{ mb: 1, mt: 2 }} />
+                <Box sx={{ mt: 4 }}>
+                  <Typography
+                    component="h2"
+                    variant="h6"
+                    sx={{ fontWeight: "bold", mb: 2 }}
+                  >
+                    Messages
+                  </Typography>
+                  <List>
+                    {contactedClients.map((client, index) => (
                       <ListItem
-                        sx={{ width: "100%", px: 0, py: 1 }} // Ensure each ListItem takes full width
+                        key={index}
                         secondaryAction={
                           <IconButton
                             edge="end"
@@ -1169,7 +1105,6 @@ function PhotographerDashboard() {
                       >
                         <ListItemButton
                           onClick={() => handleContactClick(client)}
-                          sx={{ width: "100%" }}
                         >
                           <ListItemAvatar>
                             <Avatar
@@ -1180,25 +1115,15 @@ function PhotographerDashboard() {
                           <ListItemText primary={client.username} />
                         </ListItemButton>
                       </ListItem>
-
-                      {/* Divider between each contact except the last one */}
-                      {index < contactedClients.length - 1 && <Divider />}
-                    </React.Fragment>
-                  ))}
-                </List>
+                    ))}
+                  </List>
+                </Box>
               </CardContent>
             </Card>
           </Grid>
 
           <Grid item xs={12} md={8} sx={{ flexBasis: "75%" }}>
-            <Card
-              sx={{
-                p: 2,
-                boxShadow: "none",
-                mb: 4,
-                border: "1px solid #DADBDD",
-              }}
-            >
+            <Card sx={{ p: 2, boxShadow: "none", mb: 4, border: "1px solid #DADBDD" }}>
               <CardContent sx={{ position: "relative" }}>
                 {viewMode === "contactDetails" && selectedContact ? (
                   <>
@@ -1224,48 +1149,10 @@ function PhotographerDashboard() {
                       Client Information
                     </Typography>
 
-                    {clients.length > 0 ? (
-                      clients.map((client) => (
-                        <Box
-                          key={client.id}
-                          sx={{ mb: 3, display: "flex", alignItems: "center" }}
-                        >
-                          {/* Display profile picture */}
-                          <Avatar
-                            alt={client.username}
-                            src={client.profilePicture || "/default-avatar.png"} // Fallback image if no profile picture
-                            sx={{ width: 100, height: 100, marginRight: 2 }}
-                          />
-                          <Box>
-                            <Typography
-                              variant="body1"
-                              sx={{ mb: 1, color: "#62646F" }}
-                            >
-                              <strong style={{ color: "black" }}>Name</strong>{" "}
-                              <br></br> {client.username || "N/A"}
-                            </Typography>
-                            <Typography
-                              variant="body1"
-                              sx={{ mb: 1, color: "#62646F" }}
-                            >
-                              <strong style={{ color: "black" }}>
-                                Email Address
-                              </strong>{" "}
-                              <br></br> {client.email || "N/A"}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      ))
-                    ) : (
-                      <Typography
-                        variant="body2"
-                        sx={{ textAlign: "center", mt: 2 }}
-                      >
-                        No clients found.
-                      </Typography>
-                    )}
-
-                    <Divider sx={{ my: 3 }}></Divider>
+                    <Typography variant="body1" sx={{ mb: 2 }}>
+                      Contact with {selectedContact.username}
+                    </Typography>
+                    <Divider sx={{my: 3}}></Divider>
                     <Typography
                       component="h2"
                       variant="h5"
@@ -1287,23 +1174,17 @@ function PhotographerDashboard() {
                           variant="outlined"
                           color="primary"
                           component="span"
-                          sx={{ mr: 1, p: "8px 16px", textTransform: "none" }}
+                          sx={{ mr: 1, p: "8px 16px", textTransform: "none", borderRadius: "4px" }}
                         >
                           Add Images
                         </Button>
                       </label>
                       <Button
-                        variant="contained"
+                        variant="outlined"
                         color="primary"
                         onClick={handleUploadImagesSharing}
                         disabled={files.length === 0 || loading}
-                        sx={{
-                          mr: 1,
-                          p: "8px 16px",
-                          position: "relative",
-                          textTransform: "none",
-                          boxShadow: "none",
-                        }}
+                        sx={{ mr: 1, p: "8px 16px", position: "relative", textTransform: "none", borderRadius: "4px" }}
                       >
                         {loading ? (
                           <Box sx={{ display: "flex", alignItems: "center" }}>
@@ -1322,12 +1203,7 @@ function PhotographerDashboard() {
                         color="error"
                         onClick={handleRemoveAllImages}
                         disabled={removing}
-                        sx={{
-                          mr: 1,
-                          p: "8px 16px",
-                          position: "relative",
-                          textTransform: "none",
-                        }} // Maintain consistent button padding and size
+                        sx={{ mr: 1, p: "8px 16px", position: "relative", textTransform: "none", borderRadius: "4px" }} // Maintain consistent button padding and size
                       >
                         {removing ? (
                           <Box sx={{ display: "flex", alignItems: "center" }}>
@@ -1346,12 +1222,7 @@ function PhotographerDashboard() {
                         color="primary"
                         onClick={handleSendImages}
                         disabled={sending || files.length === 0} // Disable when sending or no files are selected
-                        sx={{
-                          p: "8px 16px",
-                          position: "relative",
-                          textTransform: "none",
-                          boxShadow: "none",
-                        }}
+                        sx={{ p: "8px 16px", position: "relative", textTransform: "none", borderRadius: "4px" }}
                       >
                         {sending ? (
                           <Box sx={{ display: "flex", alignItems: "center" }}>
@@ -1375,7 +1246,7 @@ function PhotographerDashboard() {
                         border: "1px solid #ccc",
                         p: 2,
                         borderRadius: 2,
-                        mb: 5,
+                        mb: 5
                       }}
                     >
                       <Grid container spacing={2}>
@@ -1404,7 +1275,7 @@ function PhotographerDashboard() {
                               color="textSecondary"
                               sx={{ textAlign: "center" }}
                             >
-                              No images have been uploaded yet.
+                              No images uploaded.
                             </Typography>
                           </Grid>
                         ) : (
@@ -1442,12 +1313,12 @@ function PhotographerDashboard() {
                       </Grid>
                     </Box>
 
-                    <Divider sx={{ my: 3 }}></Divider>
+                    <Divider sx={{my: 2}}></Divider>
 
                     {/* New Section for Client's Selected Images */}
-                    <Box>
+                    <Box sx={{ mt: 4 }}>
                       <Typography
-                        component="h3"
+                        component="h2"
                         variant="h5"
                         sx={{ fontWeight: "bold", mb: 2 }}
                       >
@@ -1501,7 +1372,7 @@ function PhotographerDashboard() {
                                 color="textSecondary"
                                 sx={{ textAlign: "center" }}
                               >
-                                The client has not selected any images yet.
+                                No images selected by the client.
                               </Typography>
                             </Grid>
                           )}
@@ -1514,11 +1385,7 @@ function PhotographerDashboard() {
                           variant="contained"
                           color="error"
                           onClick={handleRemoveImages}
-                          sx={{
-                            p: "8px 16px",
-                            textTransform: "none",
-                            boxShadow: "none",
-                          }}
+                          sx={{boxShadow: "none", p: "11px 16px", textTransform: "none", borderRadius: "4px"}}
                         >
                           Remove All Images
                         </Button>
@@ -1535,13 +1402,13 @@ function PhotographerDashboard() {
                           variant="h5"
                           sx={{ fontWeight: "bold", mb: 2 }}
                         >
-                          Service Overview
+                          Description
                         </Typography>
                         <Typography
                           variant="subtitle1"
                           sx={{ color: "#62646F", fontWeight: "bold", mb: -1 }}
                         >
-                          Category Overview (Required)
+                          Short Description
                         </Typography>
                         <TextField
                           margin="normal"
@@ -1550,7 +1417,6 @@ function PhotographerDashboard() {
                           id="shortDescription"
                           name="shortDescription"
                           autoComplete="short-description"
-                          placeholder="Wedding Photography | Event Photography etc. "
                           inputRef={shortDescriptionRef}
                           InputLabelProps={{ shrink: true }}
                           sx={{
@@ -1567,7 +1433,7 @@ function PhotographerDashboard() {
                           variant="subtitle1"
                           sx={{ color: "#62646F", fontWeight: "bold", mb: -1 }}
                         >
-                          Package Details (Required)
+                          Detailed Description
                         </Typography>
                         <TextField
                           margin="normal"
@@ -1576,7 +1442,6 @@ function PhotographerDashboard() {
                           id="detailedDescription"
                           name="detailedDescription"
                           autoComplete="detailed-description"
-                          placeholder="Outline what’s included in the package, such as session length, number of photos, or any special features."
                           multiline
                           rows={14}
                           inputRef={detailedDescriptionRef}
@@ -1595,7 +1460,7 @@ function PhotographerDashboard() {
                           variant="subtitle1"
                           sx={{ color: "#62646F", fontWeight: "bold", mb: -1 }}
                         >
-                          Price Range (Required)
+                          Price Details
                         </Typography>
                         <TextField
                           margin="normal"
@@ -1603,10 +1468,8 @@ function PhotographerDashboard() {
                           id="price"
                           name="price"
                           autoComplete="price"
-                          placeholder="100-500"
                           inputRef={priceRef}
                           InputLabelProps={{ shrink: true }}
-                          inputProps={{ min: 0 }} // Optional: Prevents negative numbers
                           sx={{
                             "& .MuiInputBase-root": {
                               color: "#62646F", // Change input text color
@@ -1645,107 +1508,90 @@ function PhotographerDashboard() {
                         )}
                       </Button>
                     </Box>
-
+                    
                     <Divider sx={{ my: 2 }} />
                     {/* Portfolio Showcase Section */}
                     <Box sx={{ backgroundColor: "white", borderRadius: 2 }}>
-                      <Typography
-                        component="h2"
-                        variant="h5"
-                        sx={{ fontWeight: "bold", mb: 1, mt: 3 }}
-                      >
-                        Portfolio Showcase
-                      </Typography>
-                      <Box sx={{ mb: 2 }}>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleFileChange}
-                          style={{ display: "none" }}
-                          id="upload-images"
-                          multiple
-                        />
-                        <label htmlFor="upload-images">
-                          <Button
-                            variant="outlined"
-                            color="primary"
-                            component="span"
-                            sx={{
-                              mt: 2,
-                              mr: 1,
-                              p: "8px 14px",
-                              textTransform: "none",
-                            }}
-                          >
-                            Add Images
-                          </Button>
-                        </label>
-                        <Button
-                          variant="contained"
-                          color="primary"
-                          onClick={handleImageUpload}
-                          disabled={loading || files.length === 0}
-                          sx={{
-                            mt: 2,
-                            p: "8px 14px",
-                            boxShadow: "none",
-                            textTransform: "none",
-                          }}
-                        >
-                          Upload Images
-                        </Button>
-                      </Box>
-                      <Grid
-                        container
-                        spacing={2}
-                        sx={{ overflowY: "auto", maxHeight: "400px", mt: 2 }}
-                      >
-                        {portfolioImages.length > 0 &&
-                          portfolioImages.slice(1).map((imgURL, index) => (
-                            <Grid item xs={6} sm={3} key={index}>
-                              <Box
-                                sx={{
-                                  position: "relative",
-                                  paddingTop: "100%",
-                                  overflow: "hidden",
-                                  backgroundColor: "#f0f0f0",
-                                }}
-                              >
-                                <img
-                                  src={imgURL}
-                                  alt={`Portfolio ${index}`}
-                                  style={{
-                                    position: "absolute",
-                                    top: "50%",
-                                    left: "50%",
-                                    width: "100%",
-                                    height: "100%",
-                                    transform: "translate(-50%, -50%)",
-                                    objectFit: "cover",
-                                    cursor: "pointer",
-                                    borderRadius: "5px",
-                                  }}
-                                  onClick={() => handleOpenDialog(imgURL)}
-                                />
-                                <IconButton
-                                  onClick={() => handleRemoveImage(imgURL)}
-                                  sx={{
-                                    position: "absolute",
-                                    top: 8,
-                                    right: 8,
-                                    backgroundColor: "rgba(255, 255, 255, 0.7)",
-                                    "&:hover": {
-                                      backgroundColor: "rgba(255, 255, 255, 1)",
-                                    },
-                                  }}
-                                >
-                                  <DeleteIcon />
-                                </IconButton>
-                              </Box>
-                            </Grid>
-                          ))}
-                      </Grid>
-                    </Box>
+  <Typography component="h2" variant="h5" sx={{ fontWeight: "bold", mb: 1, mt: 3 }}>
+    Portfolio Showcase
+  </Typography>
+  <Box sx={{ mb: 2 }}>
+    <input
+      type="file"
+      accept="image/*"
+      onChange={handleFileChange}
+      style={{ display: "none" }}
+      id="upload-images"
+      multiple
+    />
+    <label htmlFor="upload-images">
+      <Button
+        variant="outlined"
+        color="primary"
+        component="span"
+        sx={{ mt: 2, mr: 1, p: "8px 16px", textTransform: "none", borderRadius: "4px"}}
+      >
+        Add Images
+      </Button>
+    </label>
+    <Button
+      variant="contained"
+      color="primary"
+      onClick={handleImageUpload}
+      disabled={loading || files.length === 0}
+      sx={{ mt: 2, p: "8px 16px", boxShadow: "none", textTransform: "none", borderRadius: "4px" }}
+    >
+      Upload Images
+    </Button>
+  </Box>
+  <Grid container spacing={2} sx={{ overflowY: "auto", maxHeight: "400px", mt: 2, }}>
+    {portfolioImages.length > 0 &&
+      portfolioImages.slice(1).map((imgURL, index) => (
+        <Grid item xs={6} sm={3} key={index}>
+          <Box
+            sx={{
+              position: "relative",
+              paddingTop: "100%",
+              overflow: "hidden",
+              backgroundColor: "#f0f0f0",
+            }}
+          >
+            <img
+              src={imgURL}
+              alt={`Portfolio ${index}`}
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                width: "100%",
+                height: "100%",
+                transform: "translate(-50%, -50%)",
+                objectFit: "cover",
+                cursor: "pointer",
+                borderRadius: "5px"
+              }}
+              onClick={() => handleOpenDialog(imgURL)}
+            />
+            <IconButton
+              onClick={() => handleRemoveImage(imgURL)}
+              sx={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                backgroundColor: "rgba(255, 255, 255, 0.7)",
+                "&:hover": {
+                  backgroundColor: "rgba(255, 255, 255, 1)",
+                },
+              }}
+            >
+              <DeleteIcon />
+            </IconButton>
+          </Box>
+        </Grid>
+      ))}
+  </Grid>
+</Box>
+
                   </>
                 )}
               </CardContent>

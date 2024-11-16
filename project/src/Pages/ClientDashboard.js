@@ -3,7 +3,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getDoc, doc, collection, query, where, getDocs, updateDoc, setDoc, addDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage, auth } from '../firebase';
+import { db, storage } from '../firebase';
 import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, Dialog, DialogTitle, DialogContent, DialogActions, Popover, Badge, Checkbox, CircularProgress, Divider } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -12,7 +12,6 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import { Link as LinkRouter } from 'react-router-dom';
 import logo from '../Assets/Logo2.png';
 import Footer from '../Components/Footer/Footer';
-import { onAuthStateChanged } from "firebase/auth";
 
 function ClientDashboard() {
   const { currentUser } = useAuth();
@@ -40,41 +39,7 @@ function ClientDashboard() {
   const [selectedContact, setSelectedContact] = useState(null);
   const [selectedImages, setSelectedImages] = useState([]);
   const [selectedImage, setSelectedImage] = useState("");
-  const [unsubscribeList, setUnsubscribeList] = useState([]);
-  const [photographers, setPhotographers] = useState([]);
   const [error, setError] = useState(null);
-
-  // Fetch only photographer data from Firestore
-  useEffect(() => {
-    const fetchPhotographers = async () => {
-      setLoading(true);
-      try {
-        // Query for photographers only
-        const photographerQuery = query(
-          collection(db, "users"),
-          where("role", "==", "photographer")
-        );
-        const querySnapshot = await getDocs(photographerQuery);
-
-        const photographerData = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          username: doc.data().username,
-          email: doc.data().email,
-          role: doc.data().role,
-          status: doc.data().status,
-          profilePicture: doc.data().profilePicture || null, // Add profile picture field
-        }));
-
-        setPhotographers(photographerData);
-      } catch (err) {
-        console.error("Error fetching photographer data:", err);
-        setError("Failed to fetch photographer data. Please try again later.");
-      }
-      setLoading(false);
-    };
-
-    fetchPhotographers();
-  }, []);
 
   // fetchData
   useEffect(() => {
@@ -103,67 +68,70 @@ function ClientDashboard() {
     fetchData();
   }, [currentUser]);
 
+  // Fetch only photographer data from Firestore
   useEffect(() => {
-    const fetchContactedPhotographers = async (user) => {
+    const fetchContactedPhotographers = async () => {
+      setLoading(true);
       try {
-        const userDocRef = doc(db, "users", user.uid);
+        // Fetch the current user's document
+        const userDocRef = doc(db, "users", currentUser.uid);
         const userDocSnapshot = await getDoc(userDocRef);
         const userData = userDocSnapshot.data();
 
-        if (userData && userData.contacts) {
+        console.log("User Data:", userData); // Debugging line
+
+        if (userData && Array.isArray(userData.contacts) && userData.contacts.length > 0) {
           const contacts = userData.contacts;
 
-          // Unsubscribe from any previous snapshots
-          unsubscribeList.forEach((unsubscribe) => unsubscribe());
-          setUnsubscribeList([]);
+          console.log("Contacts Array:", contacts); // Debugging line
 
-          // Fetching photographer data in real-time
-          const newUnsubscribes = contacts.map((photographer) => {
-            const photographerDocRef = doc(db, "users", photographer.uid);
-            return onSnapshot(photographerDocRef, (snapshot) => {
-              if (snapshot.exists()) {
-                const updatedPhotographer = snapshot.data();
-                // Update the contactedPhotographers state with the updated profile picture
-                setContactedPhotographers((prevPhotographers) =>
-                  prevPhotographers.map((prevPhotographer) =>
-                    prevPhotographer.uid === photographer.uid
-                      ? {
-                          ...prevPhotographer,
-                          profilePicture: updatedPhotographer.profilePicture,
-                        }
-                      : prevPhotographer
-                  )
-                );
+          // Fetch details for each contacted photographer
+          const photographerDetails = await Promise.all(
+            contacts.map(async (contact) => {
+              console.log("Fetching details for contact:", contact); // Debugging line
+
+              if (!contact.uid) {
+                console.error("Contact object does not have a uid:", contact);
+                return null;
               }
-            });
-          });
 
-          // Store the unsubscribe functions
-          setUnsubscribeList(newUnsubscribes);
+              const photographerDocRef = doc(db, "users", contact.uid);
+              const photographerSnapshot = await getDoc(photographerDocRef);
+
+              if (photographerSnapshot.exists()) {
+                const photographerData = photographerSnapshot.data();
+                return {
+                  uid: photographerSnapshot.id,
+                  username: photographerData.username,
+                  email: photographerData.email,
+                  role: photographerData.role,
+                  status: photographerData.status,
+                  profilePicture: photographerData.profilePicture || null,
+                };
+              } else {
+                console.error("Photographer document does not exist:", contact.uid);
+              }
+              return null;
+            })
+          );
+
+          // Filter out null values and update the state
+          const validPhotographers = photographerDetails.filter((photographer) => photographer !== null);
+          console.log("Fetched Photographers:", validPhotographers); // Debugging line
+          setContactedPhotographers(validPhotographers);
+        } else {
+          console.warn("No contacts found for user or contacts array is empty.");
+          setContactedPhotographers([]);
         }
       } catch (error) {
-        console.error("Error fetching contacts:", error);
+        console.error("Error fetching contacted photographers:", error);
+        setError("Failed to fetch contacted photographer details. Please try again later.");
       }
+      setLoading(false);
     };
 
-    // Listen for auth state changes
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        fetchContactedPhotographers(user);
-      } else {
-        // Clear the state and unsubscribe when the user logs out
-        setContactedPhotographers([]);
-        unsubscribeList.forEach((unsubscribe) => unsubscribe());
-        setUnsubscribeList([]);
-      }
-    });
-
-    // Clean up on unmount
-    return () => {
-      unsubscribeAuth();
-      unsubscribeList.forEach((unsubscribe) => unsubscribe());
-    };
-  }, [unsubscribeList]);
+    fetchContactedPhotographers();
+  }, [currentUser.uid]);
 
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -202,6 +170,11 @@ function ClientDashboard() {
     setLoading(false);
   }; */
 
+  const handleCloseSearchResults = () => {
+    setSearchQuery(""); // Clear the search input
+    setSearchResults(allPhotographers); // Reset to show all photographers
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       const photographersQuery = query(
@@ -218,11 +191,6 @@ function ClientDashboard() {
 
     fetchData();
   }, []);
-
-  const handleCloseSearchResults = () => {
-    setSearchQuery(""); // Clear the search input
-    setSearchResults(allPhotographers); // Reset to show all photographers
-  };
 
   // HandleFileChange
   const handleFileChange = (e) => {
@@ -857,7 +825,7 @@ function ClientDashboard() {
   return (
     <>
       {/*======================================  Navbar section  ======================================*/}
-      <div className="nav-section">
+      <div className="nav-section" style={{ borderBottom: "1px solid #DADBDD" }}>
         <nav className="navbar-dash">
           <div className="logo-head">
             <img src={logo} alt="" className="logo" />
@@ -876,7 +844,7 @@ function ClientDashboard() {
             }}
           >
             <li>
-              <Box sx={{ display: "flex", justifyContent: "flex-end", p: 2 }}>
+              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
                 <IconButton color="primary" onClick={handleClick}>
                   <NotificationsIcon />
                 </IconButton>
@@ -982,143 +950,195 @@ function ClientDashboard() {
         </nav>
       </div>
 
-      <Container component="main" maxWidth="xl">
-        <Grid container spacing={4} sx={{ mt: 4 }}>
-          <Grid item xs={12} md={3}>
-            <Card sx={{ p: 2, boxShadow: 3, mb: 4 }}>
-              <CardContent>
-                <Typography
-                  component="h2"
-                  variant="h6"
-                  sx={{ fontWeight: "bold", mb: 2 }}
-                >
-                  Profile Details
-                </Typography>
-                <Box component="form" onSubmit={handleUpdate} noValidate>
-                  <TextField
-                    margin="normal"
-                    required
-                    fullWidth
-                    id="username"
-                    label="Username"
-                    name="username"
-                    autoComplete="username"
-                    inputRef={usernameRef}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                  <Button
-                    type="submit"
-                    fullWidth
-                    variant="contained"
-                    color="primary"
-                    disabled={loading} // Disable button during loading
-                    sx={{ mt: 3, mb: 2, p: "12px 12px", position: "relative" }} // Preserve button padding and size
-                  >
-                    {loading ? (
-                      <Box sx={{ display: "flex", alignItems: "center" }}>
-                        <CircularProgress
-                          size={24}
-                          sx={{ color: "inherit", mr: 1 }}
-                        />
-                        Updating
-                      </Box>
-                    ) : (
-                      "Update Profile"
-                    )}
-                  </Button>
-                </Box>
-                <Box sx={{ mt: 4, textAlign: "center" }}>
-                  <Avatar
-                    src={profilePicture}
-                    alt="Profile Picture"
-                    sx={{ width: 100, height: 100, margin: "0 auto" }}
-                  />
-                  <input
-                    type="file"
-                    onChange={handleFileChange}
-                    style={{ display: "none" }}
-                    id="upload-file"
-                  />
-                  <label htmlFor="upload-file">
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      component="span"
-                      fullWidth
-                      sx={{ mt: 2, p: "12px 12px" }}
-                    >
-                      Choose Profile Picture
-                    </Button>
-                  </label>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    fullWidth
-                    onClick={handleUpload}
-                    disabled={loading || !file} // Disable button if loading or no file is selected
-                    sx={{ mt: 2, p: "12px 12px", position: "relative" }} // Preserve button padding and size
-                  >
-                    {loading ? (
-                      <Box sx={{ display: "flex", alignItems: "center" }}>
-                        <CircularProgress
-                          size={24}
-                          sx={{ color: "inherit", mr: 1 }}
-                        />
-                        Uploading
-                      </Box>
-                    ) : (
-                      "Upload Profile Picture"
-                    )}
-                  </Button>
-                </Box>
-                {/* Messages Section */}
-                <Box sx={{ mt: 4 }}>
-                  <Typography
-                    component="h2"
-                    variant="h6"
-                    sx={{ fontWeight: "bold", mb: 2 }}
-                  >
-                    Messages
-                  </Typography>
-                  <List>
-                    {contactedPhotographers.map((photographer, index) => (
-                      <ListItem
-                        key={index}
-                        secondaryAction={
-                          <IconButton
-                            edge="end"
-                            aria-label="delete"
-                            onClick={() => handleDeleteContact(photographer)}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        }
-                      >
-                        <ListItemButton
-                          onClick={() => handleContactClick(photographer)}
-                        >
-                          <ListItemAvatar>
-                            <Avatar
-                              src={photographer.profilePicture}
-                              alt={photographer.username}
-                            />
-                          </ListItemAvatar>
-                          <ListItemText primary={photographer.username} />
-                        </ListItemButton>
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={9}>
+      <Container component="main"
+        maxWidth="xl"
+        sx={{ backgroundColor: "#F5F5F5", p: 1 }}>
+        <Grid container justifyContent="center" spacing={4} sx={{ mt: 0 }}>
+        <Grid item xs={12} md={3} sx={{ flexBasis: "25%" }}>
+  {/* Profile Details Card */}
+  <Card
+    sx={{
+      p: 2,
+      boxShadow: "none",
+      mb: 4,
+      border: "1px solid #DADBDD",
+    }}
+  >
+    <CardContent>
+      <Typography
+        component="h2"
+        variant="h5"
+        sx={{ fontWeight: "bold", mb: 2 }}
+      >
+        Profile Details
+      </Typography>
+      <Box component="form" onSubmit={handleUpdate} noValidate>
+        <Typography
+          variant="subtitle1"
+          sx={{ color: "#62646F", fontWeight: "bold", mb: -1 }}
+        >
+          Username
+        </Typography>
+        <TextField
+          margin="normal"
+          required
+          fullWidth
+          id="username"
+          name="username"
+          autoComplete="username"
+          inputRef={usernameRef}
+          InputLabelProps={{ shrink: true }}
+          sx={{
+            "& .MuiInputBase-root": {
+              color: "#62646F", // Change input text color
+            },
+          }}
+        />
+        <Button
+          type="submit"
+          fullWidth
+          variant="contained"
+          color="primary"
+          disabled={loading} // Disable button during loading
+          sx={{ mt: 3, mb: 2, p: "12px 12px", position: "relative", textTransform: "none" }} // Preserve button padding and size
+        >
+          {loading ? (
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <CircularProgress
+                size={24}
+                sx={{ color: "inherit", mr: 1 }}
+              />
+              Updating
+            </Box>
+          ) : (
+            "Update Profile"
+          )}
+        </Button>
+      </Box>
+      <Divider sx={{ my: 2 }} />
+      <Box sx={{ mt: 4, textAlign: "center" }}>
+        <Avatar
+          src={profilePicture}
+          alt="Profile Picture"
+          sx={{ width: 100, height: 100, margin: "0 auto" }}
+        />
+        <input
+          type="file"
+          onChange={handleFileChange}
+          style={{ display: "none" }}
+          id="upload-file"
+        />
+        <label htmlFor="upload-file">
+          <Button
+            variant="outlined"
+            color="primary"
+            component="span"
+            fullWidth
+            sx={{ mt: 2, p: "8px 16px", textTransform: "none" }}
+          >
+            Choose Profile Picture
+          </Button>
+        </label>
+        <Button
+          variant="contained"
+          color="primary"
+          fullWidth
+          onClick={handleUpload}
+          disabled={loading || !file} // Disable button if loading or no file is selected
+          sx={{
+            mt: 2,
+            mb: 3,
+            p: "8px 16px",
+            position: "relative",
+            textTransform: "none",
+          }}
+        >
+          {loading ? (
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <CircularProgress
+                size={24}
+                sx={{ color: "inherit", mr: 1 }}
+              />
+              Uploading
+            </Box>
+          ) : (
+            "Upload Profile Picture"
+          )}
+        </Button>
+      </Box>
+    </CardContent>
+  </Card>
+
+  {/* Messages Section Card */}
+  <Card
+  sx={{
+    p: 2,
+    boxShadow: "none",
+    mb: 4,
+    border: "1px solid #DADBDD",
+  }}
+>
+  <CardContent>
+    <Typography
+      component="h2"
+      variant="h5"
+      sx={{ fontWeight: "bold", mb: 2 }}
+    >
+      Contacts
+    </Typography>
+
+    <Divider />
+
+    <List>
+      {contactedPhotographers.map((photographer, index) => (
+        <React.Fragment key={index}>
+          <ListItem
+            sx={{ width: "100%", px: 0, py: 1 }} // Ensure each ListItem takes full width
+            secondaryAction={
+              <IconButton
+                edge="end"
+                aria-label="delete"
+                onClick={() => handleDeleteContact(photographer)}
+              >
+                <DeleteIcon />
+              </IconButton>
+            }
+          >
+            <ListItemButton
+              onClick={() => handleContactClick(photographer)}
+              sx={{ width: "100%" }}
+            >
+              <ListItemAvatar>
+                <Avatar
+                  src={photographer.profilePicture}
+                  alt={photographer.username}
+                />
+              </ListItemAvatar>
+              <ListItemText primary={photographer.username} />
+            </ListItemButton>
+          </ListItem>
+
+          {/* Divider between each contact except the last one */}
+          {index < contactedPhotographers.length - 1 && <Divider />}
+        </React.Fragment>
+      ))}
+    </List>
+  </CardContent>
+</Card>
+
+</Grid>
+          <Grid item xs={12} md={8}>
             {viewMode === "search" && (
-              <Card sx={{ p: 2, boxShadow: 3, mb: 4 }}>
+              <Card sx={{
+                p: 2,
+                boxShadow: "none",
+                mb: 4,
+                border: "1px solid #DADBDD",
+              }}>
                 <CardContent>
                   <Typography
                     component="h2"
-                    variant="h6"
+                    variant="h5"
                     sx={{ fontWeight: "bold", mb: 2 }}
                   >
                     Search Photographers
@@ -1140,13 +1160,15 @@ function ClientDashboard() {
                       </IconButton>
                     )}
                   </Box>
+                  
+                  <Divider sx={{my: 4}}></Divider>
 
                   {/* Displaying search results or message */}
                   <Grid container spacing={2}>
                     {searchResults.length > 0
                       ? searchResults.map((photographer, index) => (
                           <Grid item xs={12} sm={6} md={4} key={index}>
-                            <Card sx={{ boxShadow: 3 }}>
+                            <Card sx={{ boxShadow: 1, border: "1px solid #DADBDD" }}>
                               <CardContent>
                                 <Avatar
                                   src={photographer.profilePicture}
@@ -1235,10 +1257,10 @@ function ClientDashboard() {
                   >
                     <Typography
                       component="h2"
-                      variant="h5"
+                      variant="h6"
                       sx={{ fontWeight: "bold" }}
                     >
-                      Photographer Contact Details
+                      Chat with {selectedContact.username}
                     </Typography>
                     <Button
                       variant="outlined"
@@ -1248,62 +1270,7 @@ function ClientDashboard() {
                       Back
                     </Button>
                   </Box>
-
                   <Box sx={{ mt: 2 }}>
-                    {photographers.length > 0 ? (
-                      photographers.map((photographer) => (
-                        <Box
-                          key={photographer.id}
-                          sx={{ mb: 3, display: "flex", alignItems: "center" }}
-                        >
-                          {/* Display profile picture */}
-                          <Avatar
-                            alt={photographer.username}
-                            src={
-                              photographer.profilePicture ||
-                              "/default-avatar.png"
-                            } // Fallback image if no profile picture
-                            sx={{ width: 100, height: 100, marginRight: 2 }}
-                          />
-                          <Box>
-                            <Typography
-                              variant="body1"
-                              sx={{ mb: 1, color: "#62646F" }}
-                            >
-                              <strong style={{ color: "black" }}>Name</strong>{" "}
-                              <br></br> {photographer.username || "N/A"}
-                            </Typography>
-                            <Typography
-                              variant="body1"
-                              sx={{ mb: 1, color: "#62646F" }}
-                            >
-                              <strong style={{ color: "black" }}>
-                                Email Address
-                              </strong>{" "}
-                              <br></br>
-                              {photographer.email || "N/A"}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      ))
-                    ) : (
-                      <Typography
-                        variant="body2"
-                        sx={{ textAlign: "center", mt: 2 }}
-                      >
-                        No photographers found.
-                      </Typography>
-                    )}
-
-                    <Divider sx={{ my: 3 }}></Divider>
-
-                    <Typography
-                      component="h2"
-                      variant="h5"
-                      sx={{ fontWeight: "bold" }}
-                    >
-                      Images Sent by the Photographer
-                    </Typography>
                     <Button
                       variant="contained"
                       color="primary"
@@ -1314,6 +1281,8 @@ function ClientDashboard() {
                         p: "8px 16px",
                         position: "relative",
                         width: "250px",
+                        boxShadow: 0,
+                        textTransform: "none"
                       }} // Preserve button padding and size
                     >
                       {loading ? (
@@ -1441,7 +1410,7 @@ function ClientDashboard() {
         }}
       >
         <DialogTitle>
-          Photographer Details
+          Photographer Information
           <IconButton
             edge="end"
             color="inherit"
@@ -1502,15 +1471,16 @@ function ClientDashboard() {
                   Description
                 </Typography>
                 <Typography variant="body1" color="textPrimary" sx={{ mt: 2 }}>
-                  {viewPhotographer.detailedDescription
-                    .split("\n")
-                    .map((line, index) => (
-                      <span key={index}>
-                        {line}
-                        <br />
-                      </span>
-                    ))}
-                </Typography>
+  {(viewPhotographer.detailedDescription || "")
+    .split("\n")
+    .map((line, index) => (
+      <span key={index}>
+        {line}
+        <br />
+      </span>
+    ))}
+</Typography>
+
               </Box>
 
               {/* Portfolio Section with Border and Scroll */}
@@ -1556,7 +1526,7 @@ function ClientDashboard() {
                         ))
                     ) : (
                       <Typography sx={{ mt: 2, ml: 2 }}>
-                        No portfolio images available
+                        No portfolio images.
                       </Typography>
                     )}
                   </Grid>
