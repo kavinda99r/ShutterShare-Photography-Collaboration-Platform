@@ -3,7 +3,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getDoc, doc, collection, query, where, getDocs, updateDoc, setDoc, addDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { db, storage, auth } from '../firebase';
 import { TextField, Button, Container, Avatar, Typography, Box, Grid, Card, CardContent, IconButton, List, ListItem, ListItemAvatar, ListItemText, ListItemButton, Dialog, DialogTitle, DialogContent, DialogActions, Popover, Badge, Checkbox, CircularProgress, Divider } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -12,6 +12,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import { Link as LinkRouter } from 'react-router-dom';
 import logo from '../Assets/Logo2.png';
 import Footer from '../Components/Footer/Footer';
+import { onAuthStateChanged } from "firebase/auth";
 
 function ClientDashboard() {
   const { currentUser } = useAuth();
@@ -39,6 +40,41 @@ function ClientDashboard() {
   const [selectedContact, setSelectedContact] = useState(null);
   const [selectedImages, setSelectedImages] = useState([]);
   const [selectedImage, setSelectedImage] = useState("");
+  const [unsubscribeList, setUnsubscribeList] = useState([]);
+  const [photographers, setPhotographers] = useState([]);
+  const [error, setError] = useState(null);
+
+  // Fetch only photographer data from Firestore
+  useEffect(() => {
+    const fetchPhotographers = async () => {
+      setLoading(true);
+      try {
+        // Query for photographers only
+        const photographerQuery = query(
+          collection(db, "users"),
+          where("role", "==", "photographer")
+        );
+        const querySnapshot = await getDocs(photographerQuery);
+
+        const photographerData = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          username: doc.data().username,
+          email: doc.data().email,
+          role: doc.data().role,
+          status: doc.data().status,
+          profilePicture: doc.data().profilePicture || null, // Add profile picture field
+        }));
+
+        setPhotographers(photographerData);
+      } catch (err) {
+        console.error("Error fetching photographer data:", err);
+        setError("Failed to fetch photographer data. Please try again later.");
+      }
+      setLoading(false);
+    };
+
+    fetchPhotographers();
+  }, []);
 
   // fetchData
   useEffect(() => {
@@ -67,22 +103,67 @@ function ClientDashboard() {
     fetchData();
   }, [currentUser]);
 
-  // fetchContactedPhotographers
   useEffect(() => {
-    const fetchContactedPhotographers = async () => {
+    const fetchContactedPhotographers = async (user) => {
       try {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        const userData = userDoc.data();
+        const userDocRef = doc(db, "users", user.uid);
+        const userDocSnapshot = await getDoc(userDocRef);
+        const userData = userDocSnapshot.data();
+
         if (userData && userData.contacts) {
-          setContactedPhotographers(userData.contacts);
+          const contacts = userData.contacts;
+
+          // Unsubscribe from any previous snapshots
+          unsubscribeList.forEach((unsubscribe) => unsubscribe());
+          setUnsubscribeList([]);
+
+          // Fetching photographer data in real-time
+          const newUnsubscribes = contacts.map((photographer) => {
+            const photographerDocRef = doc(db, "users", photographer.uid);
+            return onSnapshot(photographerDocRef, (snapshot) => {
+              if (snapshot.exists()) {
+                const updatedPhotographer = snapshot.data();
+                // Update the contactedPhotographers state with the updated profile picture
+                setContactedPhotographers((prevPhotographers) =>
+                  prevPhotographers.map((prevPhotographer) =>
+                    prevPhotographer.uid === photographer.uid
+                      ? {
+                          ...prevPhotographer,
+                          profilePicture: updatedPhotographer.profilePicture,
+                        }
+                      : prevPhotographer
+                  )
+                );
+              }
+            });
+          });
+
+          // Store the unsubscribe functions
+          setUnsubscribeList(newUnsubscribes);
         }
       } catch (error) {
         console.error("Error fetching contacts:", error);
       }
     };
 
-    fetchContactedPhotographers();
-  }, [currentUser.uid]);
+    // Listen for auth state changes
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        fetchContactedPhotographers(user);
+      } else {
+        // Clear the state and unsubscribe when the user logs out
+        setContactedPhotographers([]);
+        unsubscribeList.forEach((unsubscribe) => unsubscribe());
+        setUnsubscribeList([]);
+      }
+    });
+
+    // Clean up on unmount
+    return () => {
+      unsubscribeAuth();
+      unsubscribeList.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [unsubscribeList]);
 
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -121,11 +202,6 @@ function ClientDashboard() {
     setLoading(false);
   }; */
 
-  const handleCloseSearchResults = () => {
-    setSearchQuery(""); // Clear the search input
-    setSearchResults(allPhotographers); // Reset to show all photographers
-  };
-
   useEffect(() => {
     const fetchData = async () => {
       const photographersQuery = query(
@@ -142,6 +218,11 @@ function ClientDashboard() {
 
     fetchData();
   }, []);
+
+  const handleCloseSearchResults = () => {
+    setSearchQuery(""); // Clear the search input
+    setSearchResults(allPhotographers); // Reset to show all photographers
+  };
 
   // HandleFileChange
   const handleFileChange = (e) => {
@@ -795,76 +876,83 @@ function ClientDashboard() {
             }}
           >
             <li>
-            <Box sx={{ display: "flex", justifyContent: "flex-end", p: 2 }}>
-  <IconButton color="primary" onClick={handleClick}>
-    <NotificationsIcon />
-  </IconButton>
-</Box>
+              <Box sx={{ display: "flex", justifyContent: "flex-end", p: 2 }}>
+                <IconButton color="primary" onClick={handleClick}>
+                  <NotificationsIcon />
+                </IconButton>
+              </Box>
 
-<Popover
-  open={open}
-  anchorEl={anchorEl}
-  onClose={handleClose}
-  anchorOrigin={{
-    vertical: "bottom",
-    horizontal: "right",
-  }}
-  transformOrigin={{
-    vertical: "top",
-    horizontal: "right",
-  }}
-  sx={{
-    boxShadow: "none",
-    "& .MuiPopover-paper": {
-      boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.09)", // Ensures popover paper has no shadow
-      border: "1px solid #e0e0e0", // Light border
-      borderRadius: "4px", // Rounded corners
-    },
-  }}
->
-  <Box sx={{ p: 2, width: 500, maxHeight: 300, overflowY: "auto" }}>
-    {/* Notifications Title with Icon */}
-    <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-      <NotificationsIcon sx={{ mr: 1, color: "#62646F" }} />
-      <Typography variant="h6" sx={{ color: "#62646F" }}>
-        Notifications
-      </Typography>
-    </Box>
-
-    {/* Divider after the title */}
-    <Divider sx={{ mb: 2 }} />
-
-    {/* Notification List */}
-    {notifications.length === 0 ? (
-      <Typography sx={{ color: "#62646F" }}>No notifications</Typography>
-    ) : (
-      <List>
-        {notifications.map((notification) => (
-          <React.Fragment key={notification.id}>
-            <ListItem sx={{ display: "flex", alignItems: "center" }}>
-              <ListItemText
-                primary={notification.message}
-                secondary={
-                  notification.timestamp
-                    ? new Date(notification.timestamp.seconds * 1000).toLocaleString()
-                    : ""
-                }
-              />
-              <IconButton
-                color="error"
-                onClick={() => handleDelete(notification.id)}
+              <Popover
+                open={open}
+                anchorEl={anchorEl}
+                onClose={handleClose}
+                anchorOrigin={{
+                  vertical: "bottom",
+                  horizontal: "right",
+                }}
+                transformOrigin={{
+                  vertical: "top",
+                  horizontal: "right",
+                }}
+                sx={{
+                  boxShadow: "none",
+                  "& .MuiPopover-paper": {
+                    boxShadow: "0px 4px 4px rgba(0, 0, 0, 0.09)", // Ensures popover paper has no shadow
+                    border: "1px solid #e0e0e0", // Light border
+                    borderRadius: "4px", // Rounded corners
+                  },
+                }}
               >
-                <DeleteIcon />
-              </IconButton>
-            </ListItem>
-            <Divider sx={{ my: 1 }} />
-          </React.Fragment>
-        ))}
-      </List>
-    )}
-  </Box>
-</Popover>
+                <Box
+                  sx={{ p: 2, width: 500, maxHeight: 300, overflowY: "auto" }}
+                >
+                  {/* Notifications Title with Icon */}
+                  <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                    <NotificationsIcon sx={{ mr: 1, color: "#62646F" }} />
+                    <Typography variant="h6" sx={{ color: "#62646F" }}>
+                      Notifications
+                    </Typography>
+                  </Box>
 
+                  {/* Divider after the title */}
+                  <Divider sx={{ mb: 2 }} />
+
+                  {/* Notification List */}
+                  {notifications.length === 0 ? (
+                    <Typography sx={{ color: "#62646F" }}>
+                      No notifications
+                    </Typography>
+                  ) : (
+                    <List>
+                      {notifications.map((notification) => (
+                        <React.Fragment key={notification.id}>
+                          <ListItem
+                            sx={{ display: "flex", alignItems: "center" }}
+                          >
+                            <ListItemText
+                              primary={notification.message}
+                              secondary={
+                                notification.timestamp
+                                  ? new Date(
+                                      notification.timestamp.seconds * 1000
+                                    ).toLocaleString()
+                                  : ""
+                              }
+                            />
+                            <IconButton
+                              color="error"
+                              onClick={() => handleDelete(notification.id)}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </ListItem>
+                          <Divider sx={{ my: 1 }} />
+                        </React.Fragment>
+                      ))}
+                    </List>
+                  )}
+                </Box>
+              </Popover>
             </li>
             <li>
               <LinkRouter to="/login" style={{ textDecoration: "none" }}>
@@ -1147,10 +1235,10 @@ function ClientDashboard() {
                   >
                     <Typography
                       component="h2"
-                      variant="h6"
+                      variant="h5"
                       sx={{ fontWeight: "bold" }}
                     >
-                      Chat with {selectedContact.username}
+                      Photographer Contact Details
                     </Typography>
                     <Button
                       variant="outlined"
@@ -1160,7 +1248,62 @@ function ClientDashboard() {
                       Back
                     </Button>
                   </Box>
+
                   <Box sx={{ mt: 2 }}>
+                    {photographers.length > 0 ? (
+                      photographers.map((photographer) => (
+                        <Box
+                          key={photographer.id}
+                          sx={{ mb: 3, display: "flex", alignItems: "center" }}
+                        >
+                          {/* Display profile picture */}
+                          <Avatar
+                            alt={photographer.username}
+                            src={
+                              photographer.profilePicture ||
+                              "/default-avatar.png"
+                            } // Fallback image if no profile picture
+                            sx={{ width: 100, height: 100, marginRight: 2 }}
+                          />
+                          <Box>
+                            <Typography
+                              variant="body1"
+                              sx={{ mb: 1, color: "#62646F" }}
+                            >
+                              <strong style={{ color: "black" }}>Name</strong>{" "}
+                              <br></br> {photographer.username || "N/A"}
+                            </Typography>
+                            <Typography
+                              variant="body1"
+                              sx={{ mb: 1, color: "#62646F" }}
+                            >
+                              <strong style={{ color: "black" }}>
+                                Email Address
+                              </strong>{" "}
+                              <br></br>
+                              {photographer.email || "N/A"}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      ))
+                    ) : (
+                      <Typography
+                        variant="body2"
+                        sx={{ textAlign: "center", mt: 2 }}
+                      >
+                        No photographers found.
+                      </Typography>
+                    )}
+
+                    <Divider sx={{ my: 3 }}></Divider>
+
+                    <Typography
+                      component="h2"
+                      variant="h5"
+                      sx={{ fontWeight: "bold" }}
+                    >
+                      Images Sent by the Photographer
+                    </Typography>
                     <Button
                       variant="contained"
                       color="primary"
