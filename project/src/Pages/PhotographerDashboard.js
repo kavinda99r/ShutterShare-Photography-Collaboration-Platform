@@ -46,6 +46,10 @@ function PhotographerDashboard() {
 
   
 
+
+  
+  
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -1149,9 +1153,12 @@ function PhotographerDashboard() {
                       Client Information
                     </Typography>
 
-                    <Typography variant="body1" sx={{ mb: 2 }}>
-                      Contact with {selectedContact.username}
-                    </Typography>
+                    <Typography variant="body1" sx={{ mb: 2, fontWeight: "bold", color: "#62646F" }}>
+  <span style={{ color: "black" }}>Name: </span>{selectedContact.username}
+  <br />
+  <span style={{ color: "black" }}>Email: </span>{selectedContact.email}
+</Typography>
+
                     <Divider sx={{my: 3}}></Divider>
                     <Typography
                       component="h2"

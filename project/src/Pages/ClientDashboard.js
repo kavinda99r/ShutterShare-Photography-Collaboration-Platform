@@ -1129,12 +1129,7 @@ function ClientDashboard() {
 </Grid>
           <Grid item xs={12} md={8}>
             {viewMode === "search" && (
-              <Card sx={{
-                p: 2,
-                boxShadow: "none",
-                mb: 4,
-                border: "1px solid #DADBDD",
-              }}>
+              <Card sx={{ p: 2, boxShadow: "none", mb: 4, border: "1px solid #DADBDD" }}>
                 <CardContent>
                   <Typography
                     component="h2"
@@ -1246,7 +1241,7 @@ function ClientDashboard() {
             )}
 
             {viewMode === "contactDetails" && selectedContact && (
-              <Card sx={{ p: 2, boxShadow: 3 }}>
+              <Card sx={{ p: 2, boxShadow: "none", mb: 4, border: "1px solid #DADBDD" }}>
                 <CardContent>
                   <Box
                     sx={{
@@ -1257,11 +1252,12 @@ function ClientDashboard() {
                   >
                     <Typography
                       component="h2"
-                      variant="h6"
+                      variant="h5"
                       sx={{ fontWeight: "bold" }}
                     >
-                      Chat with {selectedContact.username}
+                      Photographer Information
                     </Typography>
+                   
                     <Button
                       variant="outlined"
                       color="primary"
@@ -1269,8 +1265,28 @@ function ClientDashboard() {
                     >
                       Back
                     </Button>
+                    
                   </Box>
                   <Box sx={{ mt: 2 }}>
+                  <Typography
+      component="p"
+      variant="body1"
+      sx={{ fontWeight: "bold", color: "#62646F" }}
+    >
+      <span style={{ color: "black" }}>Name: </span>
+      {selectedContact.username}
+      <br />
+      <span style={{ color: "black" }}>Email Address: </span>
+      {selectedContact.email}
+    </Typography>
+<Divider sx={{my: 2}}></Divider>
+<Typography
+                      component="h2"
+                      variant="h5"
+                      sx={{ fontWeight: "bold" }}
+                    >
+                      Images sent by the Photographer
+                    </Typography>
                     <Button
                       variant="contained"
                       color="primary"
