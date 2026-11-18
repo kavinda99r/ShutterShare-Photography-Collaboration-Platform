@@ -1,4 +1,4 @@
-# ShutterShare - Photography Collaboration Platform ✅
+# ShutterShare - Photography Collaboration Platform (Version update ongoing)
 
 ShutterShare is a web-based platform designed to simplify collaboration between photographers and clients, streamlining the album creation process. The application enables photographers and clients to connect, share images, and curate albums efficiently, ensuring a seamless and intuitive experience for both parties.
 
